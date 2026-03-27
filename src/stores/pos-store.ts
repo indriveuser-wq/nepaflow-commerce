@@ -26,7 +26,6 @@ type POSStore = {
   setPaymentMethod: (m: 'cash' | 'qr' | 'manual') => void;
   setAmountPaid: (a: number) => void;
   getSubtotal: () => number;
-  getTax: () => number;
   getTotal: () => number;
   getChange: () => number;
   clearCart: () => void;
