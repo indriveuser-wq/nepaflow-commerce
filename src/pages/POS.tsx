@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, ShoppingBag, ShoppingCart } from "lucide-react";
 import { formatNPR } from "@/lib/formatters";
-import { mockProducts, mockCategories } from "@/lib/mock-data";
+import { useProductStore } from "@/stores/product-store";
 import { usePOSStore } from "@/stores/pos-store";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { POSCart } from "@/components/pos/POSCart";
@@ -16,15 +16,16 @@ export default function POS() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const store = usePOSStore();
+  const { products, categories } = useProductStore();
   const isMobile = useIsMobile();
 
-  const filteredProducts = mockProducts.filter(p => {
+  const filteredProducts = products.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.barcode.includes(search) || p.sku.toLowerCase().includes(search.toLowerCase());
     const matchesCategory = categoryFilter === "all" || p.category_id === categoryFilter;
     return matchesSearch && matchesCategory && p.status === 'active';
   });
 
-  const addProduct = (product: typeof mockProducts[0]) => {
+  const addProduct = (product: typeof products[0]) => {
     store.addItem({ product_id: product.id, name: product.name, price: product.selling_price, quantity: 1, discount: 0, is_custom: false, notes: '' });
   };
 
@@ -39,7 +40,7 @@ export default function POS() {
           <SelectTrigger className="w-[100px] md:w-[140px]"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All</SelectItem>
-            {mockCategories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            {categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
@@ -65,7 +66,6 @@ export default function POS() {
     </div>
   );
 
-  // Mobile: product grid + floating cart button with sheet
   if (isMobile) {
     return (
       <div className="flex flex-col h-[calc(100vh-8rem)]">
@@ -89,7 +89,6 @@ export default function POS() {
     );
   }
 
-  // Desktop: side-by-side
   return (
     <div className="flex h-[calc(100vh-5rem)] gap-4">
       {productGrid}
