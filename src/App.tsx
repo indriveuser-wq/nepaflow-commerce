@@ -22,6 +22,7 @@ import Logistics from "./pages/Logistics";
 import Analytics from "./pages/Analytics";
 import Staff from "./pages/Staff";
 import Settings from "./pages/Settings";
+import NewOrder from "./pages/NewOrder";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -40,6 +41,7 @@ const App = () => (
           <Route path="/products" element={<AppLayout><Products /></AppLayout>} />
           <Route path="/inventory" element={<AppLayout><Inventory /></AppLayout>} />
           <Route path="/orders" element={<AppLayout><Orders /></AppLayout>} />
+          <Route path="/orders/new" element={<AppLayout><NewOrder /></AppLayout>} />
           <Route path="/orders/:id" element={<AppLayout><OrderDetail /></AppLayout>} />
           <Route path="/pos" element={<AppLayout><POS /></AppLayout>} />
           <Route path="/customers" element={<AppLayout><Customers /></AppLayout>} />

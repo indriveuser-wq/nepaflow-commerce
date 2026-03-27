@@ -2,13 +2,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Minus, Trash2, User, ShoppingBag, CreditCard, Banknote, QrCode } from "lucide-react";
 import { formatNPR } from "@/lib/formatters";
 import { mockCustomers } from "@/lib/mock-data";
 import { usePOSStore } from "@/stores/pos-store";
+import { useOrderStore } from "@/stores/order-store";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
@@ -28,6 +29,7 @@ export function POSCart({ className }: POSCartProps) {
   const [customNote, setCustomNote] = useState("");
   const navigate = useNavigate();
   const store = usePOSStore();
+  const { addOrder, getNextOrderNumber } = useOrderStore();
 
   const filteredCustomers = mockCustomers.filter(c =>
     c.name.toLowerCase().includes(customerSearch.toLowerCase()) || c.phone.includes(customerSearch)
@@ -43,7 +45,37 @@ export function POSCart({ className }: POSCartProps) {
   const handleCheckout = () => {
     if (store.items.length === 0) { toast.error("Cart is empty"); return; }
     if (store.amountPaid < store.getTotal() && store.paymentMethod === 'cash') { toast.error("Insufficient payment"); return; }
-    toast.success("Order completed! Invoice generated.");
+
+    const orderNumber = getNextOrderNumber('KTM');
+    addOrder({
+      order_number: orderNumber,
+      customer_id: store.customer?.id || null,
+      customer_name: store.customer?.name || 'Walk-in Customer',
+      branch_id: '1',
+      status: 'completed',
+      subtotal: store.getSubtotal(),
+      discount: store.orderDiscount,
+      tax: store.getTax(),
+      total: store.getTotal(),
+      payment_status: 'paid',
+      payment_method: store.paymentMethod,
+      items: store.items.map(i => ({
+        id: crypto.randomUUID(),
+        product_id: i.product_id,
+        custom_name: i.is_custom ? i.name : null,
+        custom_price: i.is_custom ? i.price : null,
+        quantity: i.quantity,
+        unit_price: i.price,
+        discount: i.discount,
+        total: i.price * i.quantity - i.discount,
+        notes: i.notes,
+      })),
+      notes: '',
+      created_at: new Date().toISOString(),
+      created_by: 'admin',
+    });
+
+    toast.success(`Order ${orderNumber} completed!`);
     store.clearCart();
     setShowPayment(false);
     navigate('/orders');
@@ -60,7 +92,10 @@ export function POSCart({ className }: POSCartProps) {
               <Button size="sm" variant="outline"><Plus className="h-3 w-3 mr-1" />Custom</Button>
             </DialogTrigger>
             <DialogContent>
-              <DialogHeader><DialogTitle className="font-display">Add Custom Product</DialogTitle></DialogHeader>
+              <DialogHeader>
+                <DialogTitle className="font-display">Add Custom Product</DialogTitle>
+                <DialogDescription>Add a custom item not in the catalog.</DialogDescription>
+              </DialogHeader>
               <div className="space-y-3">
                 <div className="space-y-2"><Label>Product Name *</Label><Input value={customName} onChange={e => setCustomName(e.target.value)} placeholder="e.g. Screen Protector" /></div>
                 <div className="grid grid-cols-2 gap-3">
@@ -85,7 +120,10 @@ export function POSCart({ className }: POSCartProps) {
               <Button variant="outline" size="sm" className="w-full"><User className="h-3 w-3 mr-1" />Select Customer</Button>
             </DialogTrigger>
             <DialogContent>
-              <DialogHeader><DialogTitle className="font-display">Select Customer</DialogTitle></DialogHeader>
+              <DialogHeader>
+                <DialogTitle className="font-display">Select Customer</DialogTitle>
+                <DialogDescription>Choose a customer for this order.</DialogDescription>
+              </DialogHeader>
               <Input placeholder="Search by name or phone..." value={customerSearch} onChange={e => setCustomerSearch(e.target.value)} />
               <div className="max-h-60 overflow-auto space-y-1 mt-2">
                 {filteredCustomers.map(c => (
@@ -148,7 +186,10 @@ export function POSCart({ className }: POSCartProps) {
                 <Button className="flex-1"><CreditCard className="h-4 w-4 mr-2" />Checkout</Button>
               </DialogTrigger>
               <DialogContent>
-                <DialogHeader><DialogTitle className="font-display">Payment</DialogTitle></DialogHeader>
+                <DialogHeader>
+                  <DialogTitle className="font-display">Payment</DialogTitle>
+                  <DialogDescription>Complete payment for this order.</DialogDescription>
+                </DialogHeader>
                 <div className="space-y-4">
                   <div className="text-center">
                     <p className="text-sm text-muted-foreground">Total Amount</p>

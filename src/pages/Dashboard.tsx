@@ -3,19 +3,26 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TrendingUp, TrendingDown, ShoppingCart, Package, AlertTriangle, DollarSign } from "lucide-react";
 import { formatNPR, formatDate, getStatusColor } from "@/lib/formatters";
-import { mockOrders, mockProducts, mockInventory, salesChartData, paymentMethodData, branchPerformanceData } from "@/lib/mock-data";
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar, PieChart, Pie, Cell, Legend } from "recharts";
-
-const stats = [
-  { label: "Today's Revenue", value: formatNPR(45230), change: "+12.5%", up: true, icon: DollarSign },
-  { label: "Total Orders", value: "342", change: "+8.2%", up: true, icon: ShoppingCart },
-  { label: "Products", value: String(mockProducts.length), change: "3 low stock", up: false, icon: Package },
-  { label: "Low Stock Items", value: String(mockInventory.filter(i => i.quantity <= i.low_stock_threshold).length), change: "Needs attention", up: false, icon: AlertTriangle },
-];
-
-const recentOrders = mockOrders.slice(0, 5);
+import { mockInventory, salesChartData, paymentMethodData, branchPerformanceData } from "@/lib/mock-data";
+import { useProductStore } from "@/stores/product-store";
+import { useOrderStore } from "@/stores/order-store";
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar, PieChart, Pie, Cell } from "recharts";
 
 export default function Dashboard() {
+  const { products } = useProductStore();
+  const { orders } = useOrderStore();
+
+  const lowStockItems = mockInventory.filter(i => i.quantity <= i.low_stock_threshold);
+  const recentOrders = orders.slice(0, 5);
+  const totalRevenue = orders.filter(o => o.payment_status === 'paid').reduce((sum, o) => sum + o.total, 0);
+
+  const stats = [
+    { label: "Total Revenue", value: formatNPR(totalRevenue), change: `${orders.filter(o => o.payment_status === 'paid').length} paid`, up: true, icon: DollarSign },
+    { label: "Total Orders", value: String(orders.length), change: `${orders.filter(o => o.status === 'completed').length} completed`, up: true, icon: ShoppingCart },
+    { label: "Products", value: String(products.length), change: `${products.filter(p => p.status === 'active').length} active`, up: true, icon: Package },
+    { label: "Low Stock Items", value: String(lowStockItems.length), change: "Needs attention", up: false, icon: AlertTriangle },
+  ];
+
   return (
     <div className="space-y-6">
       <div>
@@ -156,7 +163,7 @@ export default function Dashboard() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {mockInventory.filter(i => i.quantity <= i.low_stock_threshold).slice(0, 5).map((item) => (
+              {lowStockItems.slice(0, 5).map((item) => (
                 <TableRow key={item.id}>
                   <TableCell className="font-medium">{item.product_name}</TableCell>
                   <TableCell>{item.sku}</TableCell>
@@ -165,7 +172,7 @@ export default function Dashboard() {
                   <TableCell className="text-right">{item.low_stock_threshold}</TableCell>
                 </TableRow>
               ))}
-              {mockInventory.filter(i => i.quantity <= i.low_stock_threshold).length === 0 && (
+              {lowStockItems.length === 0 && (
                 <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">All stock levels are healthy</TableCell></TableRow>
               )}
             </TableBody>

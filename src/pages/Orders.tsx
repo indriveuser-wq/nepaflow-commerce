@@ -6,16 +6,17 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Eye, ShoppingCart } from "lucide-react";
+import { Search, Eye, ShoppingCart, Plus } from "lucide-react";
 import { formatNPR, formatDate, getStatusColor } from "@/lib/formatters";
-import { mockOrders } from "@/lib/mock-data";
+import { useOrderStore } from "@/stores/order-store";
 
 export default function Orders() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const navigate = useNavigate();
+  const { orders } = useOrderStore();
 
-  const filtered = mockOrders.filter(o => {
+  const filtered = orders.filter(o => {
     const matchesSearch = o.order_number.toLowerCase().includes(search.toLowerCase()) || o.customer_name.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === "all" || o.status === statusFilter;
     return matchesSearch && matchesStatus;
@@ -26,9 +27,12 @@ export default function Orders() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-display font-bold tracking-tight">Orders</h1>
-          <p className="text-muted-foreground text-sm">{mockOrders.length} total orders</p>
+          <p className="text-muted-foreground text-sm">{orders.length} total orders</p>
         </div>
-        <Button onClick={() => navigate('/pos')}><ShoppingCart className="h-4 w-4 mr-2" />New Order (POS)</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => navigate('/pos')}><ShoppingCart className="h-4 w-4 mr-2" />POS</Button>
+          <Button onClick={() => navigate('/orders/new')}><Plus className="h-4 w-4 mr-2" />New Order</Button>
+        </div>
       </div>
 
       <Card>
@@ -76,6 +80,9 @@ export default function Orders() {
                   <TableCell className="text-right"><Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button></TableCell>
                 </TableRow>
               ))}
+              {filtered.length === 0 && (
+                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No orders found</TableCell></TableRow>
+              )}
             </TableBody>
           </Table>
         </CardContent>
