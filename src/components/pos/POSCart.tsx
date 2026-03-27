@@ -174,7 +174,6 @@ export function POSCart({ className }: POSCartProps) {
         <div className="border-t p-3 space-y-2">
           <div className="space-y-1 text-sm">
             <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatNPR(store.getSubtotal())}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Tax (13%)</span><span>{formatNPR(store.getTax())}</span></div>
             {store.orderDiscount > 0 && <div className="flex justify-between text-destructive"><span>Discount</span><span>-{formatNPR(store.orderDiscount)}</span></div>}
             <Separator />
             <div className="flex justify-between font-bold text-base"><span>Total</span><span>{formatNPR(store.getTotal())}</span></div>
