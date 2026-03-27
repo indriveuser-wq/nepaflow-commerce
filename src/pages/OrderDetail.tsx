@@ -8,6 +8,7 @@ import { ArrowLeft, FileText, Package, Truck } from "lucide-react";
 import { formatNPR, formatDateTime, getStatusColor } from "@/lib/formatters";
 import { mockBranches } from "@/lib/mock-data";
 import { useOrderStore } from "@/stores/order-store";
+import { useProductStore } from "@/stores/product-store";
 
 export default function OrderDetail() {
   const { id } = useParams();
