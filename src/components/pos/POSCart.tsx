@@ -55,7 +55,7 @@ export function POSCart({ className }: POSCartProps) {
       status: 'completed',
       subtotal: store.getSubtotal(),
       discount: store.orderDiscount,
-      tax: store.getTax(),
+      tax: 0,
       total: store.getTotal(),
       payment_status: 'paid',
       payment_method: store.paymentMethod,
