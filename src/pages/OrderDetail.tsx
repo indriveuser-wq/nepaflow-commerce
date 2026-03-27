@@ -14,6 +14,7 @@ export default function OrderDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const order = useOrderStore(s => s.orders.find(o => o.id === id));
+  const { products } = useProductStore();
 
   if (!order) return (
     <div className="flex flex-col items-center justify-center py-20">
