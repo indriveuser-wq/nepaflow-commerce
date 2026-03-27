@@ -71,8 +71,7 @@ export default function NewOrder() {
   };
 
   const subtotal = useMemo(() => items.reduce((sum, i) => sum + (i.unit_price * i.quantity - i.discount), 0), [items]);
-  const tax = useMemo(() => subtotal * 0.13, [subtotal]);
-  const total = useMemo(() => subtotal + tax - orderDiscount, [subtotal, tax, orderDiscount]);
+  const total = useMemo(() => subtotal - orderDiscount, [subtotal, orderDiscount]);
 
   const handleSubmit = (status: string) => {
     if (items.length === 0) { toast.error("Add at least one item"); return; }
