@@ -6,12 +6,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, FileText, Package, Truck } from "lucide-react";
 import { formatNPR, formatDateTime, getStatusColor } from "@/lib/formatters";
-import { mockOrders, mockBranches } from "@/lib/mock-data";
+import { mockBranches } from "@/lib/mock-data";
+import { useOrderStore } from "@/stores/order-store";
 
 export default function OrderDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const order = mockOrders.find(o => o.id === id);
+  const order = useOrderStore(s => s.orders.find(o => o.id === id));
 
   if (!order) return (
     <div className="flex flex-col items-center justify-center py-20">
