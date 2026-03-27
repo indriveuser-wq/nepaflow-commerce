@@ -67,7 +67,7 @@ export function AppSidebar() {
           {!collapsed && <span className="font-display font-bold text-lg tracking-tight">BizNep</span>}
         </div>
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="overflow-y-auto scrollbar-none">
         <NavGroup label="Main" items={mainItems} />
         <NavGroup label="Finance" items={financeItems} />
         <NavGroup label="Operations" items={operationItems} />

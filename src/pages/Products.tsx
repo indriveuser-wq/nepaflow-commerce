@@ -191,7 +191,6 @@ export default function Products() {
                     <p className="text-xs text-muted-foreground mb-3">{p.sku} · {p.barcode}</p>
                     <div className="flex items-end justify-between">
                       <div>
-                        <p className="text-xs text-muted-foreground">Cost {formatNPR(p.cost_price)}</p>
                         <p className="text-base font-bold font-display">{formatNPR(p.selling_price)}</p>
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
