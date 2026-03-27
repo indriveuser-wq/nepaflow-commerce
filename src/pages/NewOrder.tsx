@@ -100,7 +100,7 @@ export default function NewOrder() {
       status,
       subtotal,
       discount: orderDiscount,
-      tax,
+      tax: 0,
       total,
       payment_status: status === 'completed' ? 'paid' : 'pending',
       payment_method: paymentMethod,
