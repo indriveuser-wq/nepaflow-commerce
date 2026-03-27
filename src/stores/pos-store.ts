@@ -26,7 +26,6 @@ type POSStore = {
   setPaymentMethod: (m: 'cash' | 'qr' | 'manual') => void;
   setAmountPaid: (a: number) => void;
   getSubtotal: () => number;
-  getTax: () => number;
   getTotal: () => number;
   getChange: () => number;
   clearCart: () => void;
@@ -54,8 +53,7 @@ export const usePOSStore = create<POSStore>((set, get) => ({
   setPaymentMethod: (m) => set({ paymentMethod: m }),
   setAmountPaid: (a) => set({ amountPaid: a }),
   getSubtotal: () => get().items.reduce((sum, i) => sum + (i.price * i.quantity - i.discount), 0),
-  getTax: () => get().getSubtotal() * 0.13,
-  getTotal: () => get().getSubtotal() + get().getTax() - get().orderDiscount,
+  getTotal: () => get().getSubtotal() - get().orderDiscount,
   getChange: () => Math.max(0, get().amountPaid - get().getTotal()),
   clearCart: () => set({ items: [], customer: null, orderDiscount: 0, paymentMethod: 'cash', amountPaid: 0 }),
 }));

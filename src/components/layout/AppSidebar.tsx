@@ -60,14 +60,14 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   return (
-    <Sidebar collapsible="icon" className="border-r-0">
+    <Sidebar collapsible="icon" className="border-r-0 overflow-hidden">
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-display font-bold text-sm">B</div>
           {!collapsed && <span className="font-display font-bold text-lg tracking-tight">BizNep</span>}
         </div>
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="overflow-y-auto scrollbar-none">
         <NavGroup label="Main" items={mainItems} />
         <NavGroup label="Finance" items={financeItems} />
         <NavGroup label="Operations" items={operationItems} />

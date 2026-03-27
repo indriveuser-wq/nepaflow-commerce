@@ -71,8 +71,7 @@ export default function NewOrder() {
   };
 
   const subtotal = useMemo(() => items.reduce((sum, i) => sum + (i.unit_price * i.quantity - i.discount), 0), [items]);
-  const tax = useMemo(() => subtotal * 0.13, [subtotal]);
-  const total = useMemo(() => subtotal + tax - orderDiscount, [subtotal, tax, orderDiscount]);
+  const total = useMemo(() => subtotal - orderDiscount, [subtotal, orderDiscount]);
 
   const handleSubmit = (status: string) => {
     if (items.length === 0) { toast.error("Add at least one item"); return; }
@@ -101,7 +100,7 @@ export default function NewOrder() {
       status,
       subtotal,
       discount: orderDiscount,
-      tax,
+      tax: 0,
       total,
       payment_status: status === 'completed' ? 'paid' : 'pending',
       payment_method: paymentMethod,
@@ -252,7 +251,6 @@ export default function NewOrder() {
             <CardHeader className="pb-3"><CardTitle className="font-display text-lg">Summary</CardTitle></CardHeader>
             <CardContent className="space-y-2">
               <div className="flex justify-between text-sm"><span className="text-muted-foreground">Subtotal</span><span>{formatNPR(subtotal)}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-muted-foreground">Tax (13%)</span><span>{formatNPR(tax)}</span></div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Discount</span>
                 <Input type="number" value={orderDiscount || ''} onChange={e => setOrderDiscount(Number(e.target.value))} className="h-7 w-24 text-sm text-right" placeholder="0" />
