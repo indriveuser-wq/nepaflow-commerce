@@ -251,7 +251,6 @@ export default function NewOrder() {
             <CardHeader className="pb-3"><CardTitle className="font-display text-lg">Summary</CardTitle></CardHeader>
             <CardContent className="space-y-2">
               <div className="flex justify-between text-sm"><span className="text-muted-foreground">Subtotal</span><span>{formatNPR(subtotal)}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-muted-foreground">Tax (13%)</span><span>{formatNPR(tax)}</span></div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Discount</span>
                 <Input type="number" value={orderDiscount || ''} onChange={e => setOrderDiscount(Number(e.target.value))} className="h-7 w-24 text-sm text-right" placeholder="0" />
