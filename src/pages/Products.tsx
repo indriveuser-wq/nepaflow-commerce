@@ -106,10 +106,7 @@ export default function Products() {
               <div className="space-y-2"><Label>Name *</Label><Input value={form.name} onChange={e => updateField('name', e.target.value)} placeholder="Product name" /></div>
               <div className="space-y-2"><Label>SKU *</Label><Input value={form.sku} onChange={e => updateField('sku', e.target.value)} placeholder="SKU-001" /></div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>Cost Price (NPR)</Label><Input type="number" value={form.cost_price} onChange={e => updateField('cost_price', e.target.value)} placeholder="0" /></div>
-              <div className="space-y-2"><Label>Selling Price (NPR) *</Label><Input type="number" value={form.selling_price} onChange={e => updateField('selling_price', e.target.value)} placeholder="0" /></div>
-            </div>
+            <div className="space-y-2"><Label>Selling Price (NPR) *</Label><Input type="number" value={form.selling_price} onChange={e => updateField('selling_price', e.target.value)} placeholder="0" /></div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Category</Label>
@@ -121,7 +118,6 @@ export default function Products() {
               <div className="space-y-2"><Label>Barcode</Label><Input value={form.barcode} onChange={e => updateField('barcode', e.target.value)} placeholder="Barcode" /></div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>Tax Rate (%)</Label><Input type="number" value={form.tax_rate} onChange={e => updateField('tax_rate', e.target.value)} /></div>
               <div className="space-y-2">
                 <Label>Status</Label>
                 <Select value={form.status} onValueChange={v => updateField('status', v)}>
