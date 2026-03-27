@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Search, ArrowRightLeft, Plus, Minus, AlertTriangle, Warehouse } from "lucide-react";
+import { getStatusColor } from "@/lib/formatters";
 import { mockInventory, mockBranches } from "@/lib/mock-data";
 import { toast } from "sonner";
 
