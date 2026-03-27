@@ -22,6 +22,7 @@ import Logistics from "./pages/Logistics";
 import Analytics from "./pages/Analytics";
 import Staff from "./pages/Staff";
 import Settings from "./pages/Settings";
+import NewOrder from "./pages/NewOrder";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
