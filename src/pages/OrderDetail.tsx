@@ -8,11 +8,13 @@ import { ArrowLeft, FileText, Package, Truck } from "lucide-react";
 import { formatNPR, formatDateTime, getStatusColor } from "@/lib/formatters";
 import { mockBranches } from "@/lib/mock-data";
 import { useOrderStore } from "@/stores/order-store";
+import { useProductStore } from "@/stores/product-store";
 
 export default function OrderDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const order = useOrderStore(s => s.orders.find(o => o.id === id));
+  const { products } = useProductStore();
 
   if (!order) return (
     <div className="flex flex-col items-center justify-center py-20">
@@ -64,7 +66,7 @@ export default function OrderDetail() {
                           {item.custom_name ? (
                             <Badge variant="outline" className="text-xs bg-secondary/10 text-secondary border-secondary/20">Custom</Badge>
                           ) : <Package className="h-4 w-4 text-muted-foreground" />}
-                          <span className="font-medium">{item.custom_name || `Product #${item.product_id}`}</span>
+                          <span className="font-medium">{item.custom_name || products.find(p => p.id === item.product_id)?.name || `Product #${item.product_id}`}</span>
                         </div>
                         {item.notes && <p className="text-xs text-muted-foreground mt-1">{item.notes}</p>}
                       </TableCell>
