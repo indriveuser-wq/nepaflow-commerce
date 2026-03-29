@@ -10,6 +10,7 @@ import { useProductStore } from "@/stores/product-store";
 export default function InvoiceView() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { products } = useProductStore();
   const order = mockOrders.find(o => o.id === id);
 
   if (!order) return (
