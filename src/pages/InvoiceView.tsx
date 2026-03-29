@@ -72,7 +72,7 @@ export default function InvoiceView() {
               {order.items.map(item => (
                 <tr key={item.id} className="border-b border-border/50">
                   <td className="py-2">
-                    {item.custom_name || `Product #${item.product_id}`}
+                    {item.custom_name || products.find(p => p.id === item.product_id)?.name || `Product #${item.product_id}`}
                     {item.custom_name && <span className="text-xs text-muted-foreground ml-1">(Custom)</span>}
                     {item.notes && <p className="text-xs text-muted-foreground">{item.notes}</p>}
                   </td>
