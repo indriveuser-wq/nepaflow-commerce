@@ -5,14 +5,68 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Signup() {
   const [step, setStep] = useState(1);
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [businessName, setBusinessName] = useState("");
+  const [businessAddress, setBusinessAddress] = useState("");
+  const [phone, setPhone] = useState("");
+  const [branchName, setBranchName] = useState("");
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleSignup = (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (step === 1) { setStep(2); return; }
+
+    setLoading(true);
+    // 1. Sign up user
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name: fullName } },
+    });
+    if (authError || !authData.user) {
+      toast.error(authError?.message || "Signup failed");
+      setLoading(false);
+      return;
+    }
+
+    const userId = authData.user.id;
+
+    // 2. Create business
+    const { data: biz, error: bizErr } = await supabase.from('businesses').insert({
+      name: businessName, address: businessAddress, phone, email,
+    }).select().single();
+    if (bizErr || !biz) {
+      toast.error("Failed to create business: " + bizErr?.message);
+      setLoading(false);
+      return;
+    }
+
+    // 3. Create main branch
+    const { data: branch, error: branchErr } = await supabase.from('branches').insert({
+      business_id: biz.id, name: branchName || 'Main Branch', address: businessAddress, phone, is_main: true,
+    }).select().single();
+    if (branchErr || !branch) {
+      toast.error("Failed to create branch: " + branchErr?.message);
+      setLoading(false);
+      return;
+    }
+
+    // 4. Update profile with business/branch
+    await supabase.from('profiles').update({
+      business_id: biz.id, branch_id: branch.id, full_name: fullName,
+    }).eq('id', userId);
+
+    // 5. Assign admin role
+    await supabase.from('user_roles').insert({ user_id: userId, role: 'admin' });
+
+    setLoading(false);
     toast.success("Account created! Welcome to BizNep.");
     navigate('/dashboard');
   };
@@ -31,19 +85,21 @@ export default function Signup() {
           <form onSubmit={handleSignup} className="space-y-4">
             {step === 1 ? (
               <>
-                <div className="space-y-2"><Label>Full Name</Label><Input placeholder="Your name" required /></div>
-                <div className="space-y-2"><Label>Email</Label><Input type="email" placeholder="you@example.com" required /></div>
-                <div className="space-y-2"><Label>Password</Label><Input type="password" placeholder="••••••••" required /></div>
+                <div className="space-y-2"><Label>Full Name</Label><Input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Your name" required /></div>
+                <div className="space-y-2"><Label>Email</Label><Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required /></div>
+                <div className="space-y-2"><Label>Password</Label><Input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required minLength={6} /></div>
               </>
             ) : (
               <>
-                <div className="space-y-2"><Label>Business Name</Label><Input placeholder="e.g. Himalayan Traders" required /></div>
-                <div className="space-y-2"><Label>Business Address</Label><Input placeholder="e.g. Thamel, Kathmandu" required /></div>
-                <div className="space-y-2"><Label>Phone</Label><Input placeholder="+977-..." required /></div>
-                <div className="space-y-2"><Label>Main Branch Name</Label><Input placeholder="e.g. Kathmandu Main" required /></div>
+                <div className="space-y-2"><Label>Business Name</Label><Input value={businessName} onChange={e => setBusinessName(e.target.value)} placeholder="e.g. Himalayan Traders" required /></div>
+                <div className="space-y-2"><Label>Business Address</Label><Input value={businessAddress} onChange={e => setBusinessAddress(e.target.value)} placeholder="e.g. Thamel, Kathmandu" required /></div>
+                <div className="space-y-2"><Label>Phone</Label><Input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+977-..." required /></div>
+                <div className="space-y-2"><Label>Main Branch Name</Label><Input value={branchName} onChange={e => setBranchName(e.target.value)} placeholder="e.g. Kathmandu Main" required /></div>
               </>
             )}
-            <Button type="submit" className="w-full">{step === 1 ? "Continue" : "Complete Setup"}</Button>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Setting up..." : step === 1 ? "Continue" : "Complete Setup"}
+            </Button>
           </form>
           {step === 1 && (
             <p className="text-center text-sm text-muted-foreground mt-4">

@@ -3,7 +3,9 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider } from "@/hooks/useAuth";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -27,34 +29,42 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+const P = ({ children, roles }: { children: React.ReactNode; roles?: ('admin' | 'manager' | 'cashier')[] }) => (
+  <ProtectedRoute allowedRoles={roles}>
+    <AppLayout>{children}</AppLayout>
+  </ProtectedRoute>
+);
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/dashboard" element={<AppLayout><Dashboard /></AppLayout>} />
-          <Route path="/products" element={<AppLayout><Products /></AppLayout>} />
-          <Route path="/inventory" element={<AppLayout><Inventory /></AppLayout>} />
-          <Route path="/orders" element={<AppLayout><Orders /></AppLayout>} />
-          <Route path="/orders/new" element={<AppLayout><NewOrder /></AppLayout>} />
-          <Route path="/orders/:id" element={<AppLayout><OrderDetail /></AppLayout>} />
-          <Route path="/pos" element={<AppLayout><POS /></AppLayout>} />
-          <Route path="/customers" element={<AppLayout><Customers /></AppLayout>} />
-          <Route path="/customers/:id" element={<AppLayout><CustomerDetail /></AppLayout>} />
-          <Route path="/payments" element={<AppLayout><Payments /></AppLayout>} />
-          <Route path="/invoices" element={<AppLayout><Invoices /></AppLayout>} />
-          <Route path="/invoices/:id" element={<AppLayout><InvoiceView /></AppLayout>} />
-          <Route path="/logistics" element={<AppLayout><Logistics /></AppLayout>} />
-          <Route path="/analytics" element={<AppLayout><Analytics /></AppLayout>} />
-          <Route path="/staff" element={<AppLayout><Staff /></AppLayout>} />
-          <Route path="/settings" element={<AppLayout><Settings /></AppLayout>} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <AuthProvider>
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
+            <Route path="/dashboard" element={<P><Dashboard /></P>} />
+            <Route path="/products" element={<P><Products /></P>} />
+            <Route path="/inventory" element={<P><Inventory /></P>} />
+            <Route path="/orders" element={<P><Orders /></P>} />
+            <Route path="/orders/new" element={<P roles={['admin', 'manager']}><NewOrder /></P>} />
+            <Route path="/orders/:id" element={<P><OrderDetail /></P>} />
+            <Route path="/pos" element={<P><POS /></P>} />
+            <Route path="/customers" element={<P><Customers /></P>} />
+            <Route path="/customers/:id" element={<P><CustomerDetail /></P>} />
+            <Route path="/payments" element={<P roles={['admin', 'manager']}><Payments /></P>} />
+            <Route path="/invoices" element={<P><Invoices /></P>} />
+            <Route path="/invoices/:id" element={<P><InvoiceView /></P>} />
+            <Route path="/logistics" element={<P roles={['admin', 'manager']}><Logistics /></P>} />
+            <Route path="/analytics" element={<P roles={['admin', 'manager']}><Analytics /></P>} />
+            <Route path="/staff" element={<P roles={['admin']}><Staff /></P>} />
+            <Route path="/settings" element={<P roles={['admin']}><Settings /></P>} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

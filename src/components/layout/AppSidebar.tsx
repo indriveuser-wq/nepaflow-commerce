@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Package, Warehouse, ShoppingCart, Store, Users, CreditCard,
-  Truck, BarChart3, UserCog, Settings, FileText,
+  Truck, BarChart3, UserCog, Settings, FileText, LogOut,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -9,8 +9,12 @@ import {
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter, useSidebar,
 } from "@/components/ui/sidebar";
 import { ThemeToggle } from "./ThemeToggle";
+import { useAuth } from "@/hooks/useAuth";
+import { Button } from "@/components/ui/button";
 
-const mainItems = [
+type NavItem = { title: string; url: string; icon: React.ComponentType<{ className?: string }>; roles?: string[] };
+
+const mainItems: NavItem[] = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "POS", url: "/pos", icon: Store },
   { title: "Orders", url: "/orders", icon: ShoppingCart },
@@ -19,28 +23,33 @@ const mainItems = [
   { title: "Customers", url: "/customers", icon: Users },
 ];
 
-const financeItems = [
-  { title: "Payments", url: "/payments", icon: CreditCard },
+const financeItems: NavItem[] = [
+  { title: "Payments", url: "/payments", icon: CreditCard, roles: ['admin', 'manager'] },
   { title: "Invoices", url: "/invoices", icon: FileText },
 ];
 
-const operationItems = [
-  { title: "Logistics", url: "/logistics", icon: Truck },
-  { title: "Analytics", url: "/analytics", icon: BarChart3 },
-  { title: "Staff", url: "/staff", icon: UserCog },
-  { title: "Settings", url: "/settings", icon: Settings },
+const operationItems: NavItem[] = [
+  { title: "Logistics", url: "/logistics", icon: Truck, roles: ['admin', 'manager'] },
+  { title: "Analytics", url: "/analytics", icon: BarChart3, roles: ['admin', 'manager'] },
+  { title: "Staff", url: "/staff", icon: UserCog, roles: ['admin'] },
+  { title: "Settings", url: "/settings", icon: Settings, roles: ['admin'] },
 ];
 
-function NavGroup({ label, items }: { label: string; items: typeof mainItems }) {
+function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
+  const { role } = useAuth();
+
+  const visibleItems = items.filter(item => !item.roles || (role && item.roles.includes(role)));
+  if (visibleItems.length === 0) return null;
+
   return (
     <SidebarGroup>
       <SidebarGroupLabel>{label}</SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu>
-          {items.map((item) => (
+          {visibleItems.map((item) => (
             <SidebarMenuItem key={item.title}>
               <SidebarMenuButton asChild isActive={location.pathname === item.url || location.pathname.startsWith(item.url + '/')}>
                 <NavLink to={item.url} end={item.url === '/dashboard'} className="hover:bg-sidebar-accent/50" activeClassName="bg-sidebar-accent text-sidebar-primary font-medium">
@@ -59,6 +68,8 @@ function NavGroup({ label, items }: { label: string; items: typeof mainItems }) 
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
+  const { profile, signOut } = useAuth();
+
   return (
     <Sidebar collapsible="icon" className="border-r-0 overflow-hidden">
       <SidebarHeader className="p-4">
@@ -72,8 +83,16 @@ export function AppSidebar() {
         <NavGroup label="Finance" items={financeItems} />
         <NavGroup label="Operations" items={operationItems} />
       </SidebarContent>
-      <SidebarFooter className="p-3">
-        <ThemeToggle />
+      <SidebarFooter className="p-3 space-y-2">
+        {!collapsed && profile?.full_name && (
+          <p className="text-xs text-sidebar-foreground/60 truncate px-2">{profile.full_name}</p>
+        )}
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <Button variant="ghost" size="icon" onClick={signOut} className="h-8 w-8 text-sidebar-foreground/60 hover:text-sidebar-foreground">
+            <LogOut className="h-4 w-4" />
+          </Button>
+        </div>
       </SidebarFooter>
     </Sidebar>
   );
