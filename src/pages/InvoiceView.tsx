@@ -90,7 +90,6 @@ export default function InvoiceView() {
             <div className="w-64 space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatNPR(order.subtotal)}</span></div>
               {order.discount > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Discount</span><span>-{formatNPR(order.discount)}</span></div>}
-              <div className="flex justify-between"><span className="text-muted-foreground">Tax (13%)</span><span>{formatNPR(order.tax)}</span></div>
               <Separator />
               <div className="flex justify-between font-bold text-lg"><span>Total</span><span>{formatNPR(order.total)}</span></div>
             </div>
