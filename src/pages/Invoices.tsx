@@ -5,11 +5,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { FileText, Eye, Download } from "lucide-react";
 import { formatNPR, formatDate, getStatusColor } from "@/lib/formatters";
-import { mockOrders } from "@/lib/mock-data";
+import { useOrderStore } from "@/stores/order-store";
 
 export default function Invoices() {
   const navigate = useNavigate();
-  const invoices = mockOrders.filter(o => o.status !== 'cancelled').map(o => ({
+  const orders = useOrderStore(s => s.orders);
+  const invoices = orders.filter(o => o.status !== 'cancelled').map(o => ({
     id: o.id, invoice_number: `INV-2026-${o.id.padStart(4, '0')}`, order_number: o.order_number,
     customer_name: o.customer_name, total: o.total, payment_status: o.payment_status, date: o.created_at,
   }));

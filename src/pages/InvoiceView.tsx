@@ -4,14 +4,15 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Download, Printer } from "lucide-react";
 import { formatNPR, formatDateTime } from "@/lib/formatters";
-import { mockOrders, mockBusiness } from "@/lib/mock-data";
+import { mockBusiness } from "@/lib/mock-data";
 import { useProductStore } from "@/stores/product-store";
+import { useOrderStore } from "@/stores/order-store";
 
 export default function InvoiceView() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { products } = useProductStore();
-  const order = mockOrders.find(o => o.id === id);
+  const order = useOrderStore(s => s.orders.find(o => o.id === id));
 
   if (!order) return (
     <div className="flex flex-col items-center justify-center py-20">
