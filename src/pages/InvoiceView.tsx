@@ -5,6 +5,7 @@ import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Download, Printer } from "lucide-react";
 import { formatNPR, formatDateTime } from "@/lib/formatters";
 import { mockOrders, mockBusiness } from "@/lib/mock-data";
+import { useProductStore } from "@/stores/product-store";
 
 export default function InvoiceView() {
   const { id } = useParams();
