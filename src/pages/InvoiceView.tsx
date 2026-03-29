@@ -5,10 +5,12 @@ import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Download, Printer } from "lucide-react";
 import { formatNPR, formatDateTime } from "@/lib/formatters";
 import { mockOrders, mockBusiness } from "@/lib/mock-data";
+import { useProductStore } from "@/stores/product-store";
 
 export default function InvoiceView() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { products } = useProductStore();
   const order = mockOrders.find(o => o.id === id);
 
   if (!order) return (
@@ -70,7 +72,7 @@ export default function InvoiceView() {
               {order.items.map(item => (
                 <tr key={item.id} className="border-b border-border/50">
                   <td className="py-2">
-                    {item.custom_name || `Product #${item.product_id}`}
+                    {item.custom_name || products.find(p => p.id === item.product_id)?.name || `Product #${item.product_id}`}
                     {item.custom_name && <span className="text-xs text-muted-foreground ml-1">(Custom)</span>}
                     {item.notes && <p className="text-xs text-muted-foreground">{item.notes}</p>}
                   </td>
@@ -88,7 +90,6 @@ export default function InvoiceView() {
             <div className="w-64 space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatNPR(order.subtotal)}</span></div>
               {order.discount > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Discount</span><span>-{formatNPR(order.discount)}</span></div>}
-              <div className="flex justify-between"><span className="text-muted-foreground">Tax (13%)</span><span>{formatNPR(order.tax)}</span></div>
               <Separator />
               <div className="flex justify-between font-bold text-lg"><span>Total</span><span>{formatNPR(order.total)}</span></div>
             </div>
