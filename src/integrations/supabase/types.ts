@@ -550,6 +550,17 @@ export type Database = {
         Returns: boolean
       }
       is_admin_or_manager: { Args: { _user_id: string }; Returns: boolean }
+      setup_business: {
+        Args: {
+          _branch_name: string
+          _business_address: string
+          _business_email: string
+          _business_name: string
+          _business_phone: string
+          _user_full_name: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
       app_role: "admin" | "manager" | "cashier"
