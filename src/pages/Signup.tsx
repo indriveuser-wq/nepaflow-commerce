@@ -38,33 +38,20 @@ export default function Signup() {
 
     const userId = authData.user.id;
 
-    // 2. Create business
-    const { data: biz, error: bizErr } = await supabase.from('businesses').insert({
-      name: businessName, address: businessAddress, phone, email,
-    }).select().single();
-    if (bizErr || !biz) {
-      toast.error("Failed to create business: " + bizErr?.message);
+    // 2. Setup business, branch, profile & role via secure RPC
+    const { error: setupErr } = await supabase.rpc('setup_business', {
+      _business_name: businessName,
+      _business_address: businessAddress,
+      _business_phone: phone,
+      _business_email: email,
+      _branch_name: branchName || 'Main Branch',
+      _user_full_name: fullName,
+    });
+    if (setupErr) {
+      toast.error("Failed to set up business: " + setupErr.message);
       setLoading(false);
       return;
     }
-
-    // 3. Create main branch
-    const { data: branch, error: branchErr } = await supabase.from('branches').insert({
-      business_id: biz.id, name: branchName || 'Main Branch', address: businessAddress, phone, is_main: true,
-    }).select().single();
-    if (branchErr || !branch) {
-      toast.error("Failed to create branch: " + branchErr?.message);
-      setLoading(false);
-      return;
-    }
-
-    // 4. Update profile with business/branch
-    await supabase.from('profiles').update({
-      business_id: biz.id, branch_id: branch.id, full_name: fullName,
-    }).eq('id', userId);
-
-    // 5. Assign admin role
-    await supabase.from('user_roles').insert({ user_id: userId, role: 'admin' });
 
     setLoading(false);
     toast.success("Account created! Welcome to BizNep.");
