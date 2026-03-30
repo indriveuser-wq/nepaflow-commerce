@@ -34,13 +34,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfileAndRole = async (userId: string) => {
-    const [profileRes, roleRes] = await Promise.all([
-      supabase.from('profiles').select('*').eq('id', userId).single(),
-      supabase.from('user_roles').select('role').eq('user_id', userId).single(),
-    ]);
+  const fetchProfileAndRole = async (userId: string, retries = 3) => {
+    const profileRes = await supabase.from('profiles').select('*').eq('id', userId).single();
     if (profileRes.data) setProfile(profileRes.data as Profile);
-    if (roleRes.data) setRole((roleRes.data as { role: UserRole }).role);
+
+    const roleRes = await supabase.from('user_roles').select('role').eq('user_id', userId).maybeSingle();
+    if (roleRes.data) {
+      setRole((roleRes.data as { role: UserRole }).role);
+    } else if (retries > 0) {
+      // Role may not be ready yet (e.g. right after signup RPC)
+      setTimeout(() => fetchProfileAndRole(userId, retries - 1), 1000);
+    }
   };
 
   useEffect(() => {
