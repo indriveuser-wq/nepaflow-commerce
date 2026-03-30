@@ -36,7 +36,7 @@ export default function Signup() {
       return;
     }
 
-    const userId = authData.user.id;
+    
 
     // 2. Setup business, branch, profile & role via secure RPC
     const { error: setupErr } = await supabase.rpc('setup_business', {
