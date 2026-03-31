@@ -21,13 +21,8 @@ export default function Signup() {
   const navigate = useNavigate();
 
   const checkInvitation = async () => {
-    const { data } = await supabase
-      .from('staff_invitations')
-      .select('id')
-      .eq('email', email.trim().toLowerCase())
-      .eq('status', 'pending')
-      .limit(1);
-    return data && data.length > 0;
+    const { data } = await supabase.rpc('check_invitation', { _email: email.trim().toLowerCase() });
+    return data === true;
   };
 
   const handleSignup = async (e: React.FormEvent) => {
