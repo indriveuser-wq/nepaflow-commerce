@@ -17,14 +17,43 @@ export default function Signup() {
   const [phone, setPhone] = useState("");
   const [branchName, setBranchName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isInvited, setIsInvited] = useState(false);
   const navigate = useNavigate();
+
+  const checkInvitation = async () => {
+    const { data } = await supabase
+      .from('staff_invitations')
+      .select('id')
+      .eq('email', email.trim().toLowerCase())
+      .eq('status', 'pending')
+      .limit(1);
+    return data && data.length > 0;
+  };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (step === 1) { setStep(2); return; }
 
+    if (step === 1) {
+      setLoading(true);
+      const invited = await checkInvitation();
+      setIsInvited(!!invited);
+      setLoading(false);
+
+      if (invited) {
+        // Skip business setup, sign up directly
+        await doSignup(true);
+      } else {
+        setStep(2);
+      }
+      return;
+    }
+
+    // Step 2 — business setup (only for non-invited users)
+    await doSignup(false);
+  };
+
+  const doSignup = async (invited: boolean) => {
     setLoading(true);
-    // 1. Sign up user
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
@@ -36,9 +65,15 @@ export default function Signup() {
       return;
     }
 
-    
+    if (invited) {
+      // The handle_new_user trigger takes care of profile, role, and business assignment
+      setLoading(false);
+      toast.success("Account created! You've been added to your team.");
+      navigate('/dashboard');
+      return;
+    }
 
-    // 2. Setup business, branch, profile & role via secure RPC
+    // New business owner — call setup RPC
     const { error: setupErr } = await supabase.rpc('setup_business', {
       _business_name: businessName,
       _business_address: businessAddress,
