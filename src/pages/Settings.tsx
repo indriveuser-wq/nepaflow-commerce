@@ -1,15 +1,72 @@
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Building, MapPin, Receipt, Bell, Shield } from "lucide-react";
-import { mockBusiness, mockBranches } from "@/lib/mock-data";
+import { Building, MapPin, Receipt, Bell } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Settings() {
+  const { profile } = useAuth();
+  const [business, setBusiness] = useState<any>(null);
+  const [branches, setBranches] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Form state for business
+  const [bizName, setBizName] = useState("");
+  const [bizEmail, setBizEmail] = useState("");
+  const [bizPhone, setBizPhone] = useState("");
+  const [bizTaxId, setBizTaxId] = useState("");
+  const [bizAddress, setBizAddress] = useState("");
+
+  useEffect(() => {
+    if (!profile?.business_id) return;
+    loadData();
+  }, [profile?.business_id]);
+
+  const loadData = async () => {
+    setLoading(true);
+    const [bizRes, branchRes] = await Promise.all([
+      supabase.from('businesses').select('*').eq('id', profile!.business_id!).single(),
+      supabase.from('branches').select('*').eq('business_id', profile!.business_id!).order('is_main', { ascending: false }),
+    ]);
+    if (bizRes.data) {
+      const b = bizRes.data;
+      setBusiness(b);
+      setBizName(b.name || "");
+      setBizEmail(b.email || "");
+      setBizPhone(b.phone || "");
+      setBizTaxId(b.tax_id || "");
+      setBizAddress(b.address || "");
+    }
+    setBranches(branchRes.data || []);
+    setLoading(false);
+  };
+
+  const saveBusiness = async () => {
+    if (!profile?.business_id) return;
+    const { error } = await supabase.from('businesses').update({
+      name: bizName,
+      email: bizEmail,
+      phone: bizPhone,
+      tax_id: bizTaxId,
+      address: bizAddress,
+    }).eq('id', profile.business_id);
+    if (error) {
+      toast.error("Failed to save: " + error.message);
+    } else {
+      toast.success("Settings saved");
+    }
+  };
+
+  if (loading) {
+    return <div className="flex items-center justify-center py-12 text-muted-foreground">Loading settings...</div>;
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -33,15 +90,15 @@ export default function Settings() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2"><Label>Business Name</Label><Input defaultValue={mockBusiness.name} /></div>
-                <div className="space-y-2"><Label>Email</Label><Input defaultValue={mockBusiness.email} /></div>
+                <div className="space-y-2"><Label>Business Name</Label><Input value={bizName} onChange={e => setBizName(e.target.value)} /></div>
+                <div className="space-y-2"><Label>Email</Label><Input value={bizEmail} onChange={e => setBizEmail(e.target.value)} /></div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2"><Label>Phone</Label><Input defaultValue={mockBusiness.phone} /></div>
-                <div className="space-y-2"><Label>Tax ID (PAN)</Label><Input defaultValue={mockBusiness.tax_id} /></div>
+                <div className="space-y-2"><Label>Phone</Label><Input value={bizPhone} onChange={e => setBizPhone(e.target.value)} /></div>
+                <div className="space-y-2"><Label>Tax ID (PAN)</Label><Input value={bizTaxId} onChange={e => setBizTaxId(e.target.value)} /></div>
               </div>
-              <div className="space-y-2"><Label>Address</Label><Input defaultValue={mockBusiness.address} /></div>
-              <Button onClick={() => toast.success("Settings saved")}>Save Changes</Button>
+              <div className="space-y-2"><Label>Address</Label><Input value={bizAddress} onChange={e => setBizAddress(e.target.value)} /></div>
+              <Button onClick={saveBusiness}>Save Changes</Button>
             </CardContent>
           </Card>
         </TabsContent>
@@ -54,7 +111,7 @@ export default function Settings() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {mockBranches.map(b => (
+                {branches.map(b => (
                   <div key={b.id} className="flex items-center justify-between p-4 rounded-lg border">
                     <div>
                       <p className="font-medium">{b.name}</p>
@@ -66,6 +123,7 @@ export default function Settings() {
                     </div>
                   </div>
                 ))}
+                {branches.length === 0 && <p className="text-muted-foreground text-sm">No branches found.</p>}
                 <Button variant="outline"><MapPin className="h-4 w-4 mr-2" />Add Branch</Button>
               </div>
             </CardContent>
