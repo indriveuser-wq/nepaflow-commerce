@@ -82,7 +82,7 @@ export default function Landing() {
         <div className="max-w-3xl mx-auto text-center">
           <h2 className="text-3xl font-display font-bold tracking-tight">Ready to streamline your business?</h2>
           <p className="text-muted-foreground mt-3">Join hundreds of Nepali businesses using BizNep to manage their commerce operations.</p>
-          <Button size="lg" className="mt-8 text-base px-8" onClick={() => navigate('/signup')}>
+          <Button size="lg" className="mt-8 text-base px-8" onClick={() => navigate('/setup-business')}>
             Get Started Today <ArrowRight className="h-4 w-4 ml-2" />
           </Button>
         </div>
