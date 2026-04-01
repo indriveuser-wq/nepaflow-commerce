@@ -44,7 +44,7 @@ export default function Landing() {
             Built specifically for Nepali businesses.
           </p>
           <div className="mt-8 flex items-center justify-center gap-4">
-            <Button size="lg" onClick={() => navigate('/signup')} className="text-base px-8">
+            <Button size="lg" onClick={() => navigate('/setup-business')} className="text-base px-8">
               Start Free <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
             <Button size="lg" variant="outline" onClick={() => navigate('/setup-business')} className="text-base px-8">
