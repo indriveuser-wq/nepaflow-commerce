@@ -47,8 +47,8 @@ export default function Landing() {
             <Button size="lg" onClick={() => navigate('/signup')} className="text-base px-8">
               Start Free <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
-            <Button size="lg" variant="outline" onClick={() => navigate('/dashboard')} className="text-base px-8">
-              View Demo
+            <Button size="lg" variant="outline" onClick={() => navigate('/setup-business')} className="text-base px-8">
+              Set Up Business
             </Button>
           </div>
         </div>
