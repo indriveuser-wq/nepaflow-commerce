@@ -3,11 +3,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { UserPlus, Shield } from "lucide-react";
+import { UserPlus, Shield, Edit, Trash2 } from "lucide-react";
 import { getStatusColor } from "@/lib/formatters";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,7 +30,7 @@ type StaffMember = {
 };
 
 export default function Staff() {
-  const { profile } = useAuth();
+  const { profile, role: currentUserRole } = useAuth();
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -38,6 +38,19 @@ export default function Staff() {
   const [inviteBranch, setInviteBranch] = useState("");
   const [showInvite, setShowInvite] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Edit staff state
+  const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editBranch, setEditBranch] = useState("");
+  const [editRole, setEditRole] = useState("");
+  const [editStatus, setEditStatus] = useState("");
+  const [showEdit, setShowEdit] = useState(false);
+
+  // Delete staff state
+  const [deleteStaff, setDeleteStaff] = useState<StaffMember | null>(null);
+
+  const isAdmin = currentUserRole === 'admin';
 
   useEffect(() => {
     if (!profile?.business_id) return;
@@ -82,11 +95,83 @@ export default function Staff() {
       toast.error("Failed to send invitation: " + error.message);
       return;
     }
-    toast.success(`Invitation sent to ${inviteEmail}. They can now sign up and will be automatically assigned the ${inviteRole} role.`);
+    toast.success(`Invitation sent to ${inviteEmail}`);
     setShowInvite(false);
     setInviteEmail("");
     setInviteRole("");
     setInviteBranch("");
+  };
+
+  const openEditDialog = (s: StaffMember) => {
+    setEditingStaff(s);
+    setEditName(s.full_name || '');
+    setEditBranch(s.branch_id || '');
+    setEditRole(s.role || '');
+    setEditStatus(s.status);
+    setShowEdit(true);
+  };
+
+  const handleEditSave = async () => {
+    if (!editingStaff) return;
+    setLoading(true);
+
+    // Update profile (name, branch, status)
+    const { error: profileError } = await supabase.from('profiles').update({
+      full_name: editName,
+      branch_id: editBranch || null,
+      status: editStatus,
+    }).eq('id', editingStaff.id);
+
+    if (profileError) {
+      toast.error("Failed to update staff: " + profileError.message);
+      setLoading(false);
+      return;
+    }
+
+    // Update role if changed
+    if (editRole && editRole !== editingStaff.role) {
+      // Delete existing role then insert new one
+      await supabase.from('user_roles').delete().eq('user_id', editingStaff.id);
+      const { error: roleError } = await supabase.from('user_roles').insert({
+        user_id: editingStaff.id,
+        role: editRole as any,
+      });
+      if (roleError) {
+        toast.error("Failed to update role: " + roleError.message);
+        setLoading(false);
+        return;
+      }
+    }
+
+    toast.success("Staff member updated");
+    setShowEdit(false);
+    setEditingStaff(null);
+    setLoading(false);
+    await loadData();
+  };
+
+  const handleDeleteStaff = async () => {
+    if (!deleteStaff) return;
+    setLoading(true);
+
+    // Remove role
+    await supabase.from('user_roles').delete().eq('user_id', deleteStaff.id);
+
+    // Set profile status to inactive and unlink from business
+    const { error } = await supabase.from('profiles').update({
+      status: 'inactive',
+      business_id: null,
+      branch_id: null,
+    }).eq('id', deleteStaff.id);
+
+    setLoading(false);
+    if (error) {
+      toast.error("Failed to remove staff: " + error.message);
+      return;
+    }
+    toast.success("Staff member removed");
+    setDeleteStaff(null);
+    await loadData();
   };
 
   const roleCounts = { admin: 0, manager: 0, cashier: 0 };
@@ -99,37 +184,100 @@ export default function Staff() {
           <h1 className="text-2xl font-display font-bold tracking-tight">Staff & Roles</h1>
           <p className="text-muted-foreground text-sm">Manage team members and permissions</p>
         </div>
-        <Dialog open={showInvite} onOpenChange={setShowInvite}>
-          <DialogTrigger asChild><Button><UserPlus className="h-4 w-4 mr-2" />Invite Staff</Button></DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle className="font-display">Invite Staff Member</DialogTitle></DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2"><Label>Email</Label><Input type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="email@example.com" /></div>
-              <div className="space-y-2"><Label>Role</Label>
-                <Select value={inviteRole} onValueChange={setInviteRole}>
-                  <SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="manager">Manager</SelectItem>
-                    <SelectItem value="cashier">Cashier</SelectItem>
-                  </SelectContent>
-                </Select>
+        {isAdmin && (
+          <Dialog open={showInvite} onOpenChange={setShowInvite}>
+            <DialogTrigger asChild><Button><UserPlus className="h-4 w-4 mr-2" />Invite Staff</Button></DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle className="font-display">Invite Staff Member</DialogTitle></DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2"><Label>Email</Label><Input type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="email@example.com" /></div>
+                <div className="space-y-2"><Label>Role</Label>
+                  <Select value={inviteRole} onValueChange={setInviteRole}>
+                    <SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="manager">Manager</SelectItem>
+                      <SelectItem value="cashier">Cashier</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2"><Label>Branch</Label>
+                  <Select value={inviteBranch} onValueChange={setInviteBranch}>
+                    <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
+                    <SelectContent>
+                      {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button className="w-full" onClick={handleInvite} disabled={loading}>
+                  {loading ? "Sending..." : "Send Invitation"}
+                </Button>
+                <p className="text-xs text-muted-foreground">The invited person should sign up with this email address.</p>
               </div>
-              <div className="space-y-2"><Label>Branch</Label>
-                <Select value={inviteBranch} onValueChange={setInviteBranch}>
-                  <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
-                  <SelectContent>
-                    {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button className="w-full" onClick={handleInvite} disabled={loading}>
-                {loading ? "Sending..." : "Send Invitation"}
-              </Button>
-              <p className="text-xs text-muted-foreground">The invited person should sign up with this email address. They'll be automatically assigned the selected role and branch.</p>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
+
+      {/* Edit Staff Dialog */}
+      <Dialog open={showEdit} onOpenChange={(open) => { if (!open) { setShowEdit(false); setEditingStaff(null); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-display">Edit Staff Member</DialogTitle>
+            <DialogDescription>Update staff details and role assignment.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2"><Label>Full Name</Label><Input value={editName} onChange={e => setEditName(e.target.value)} /></div>
+            <div className="space-y-2"><Label>Role</Label>
+              <Select value={editRole} onValueChange={setEditRole}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem value="cashier">Cashier</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2"><Label>Branch</Label>
+              <Select value={editBranch} onValueChange={setEditBranch}>
+                <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
+                <SelectContent>
+                  {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2"><Label>Status</Label>
+              <Select value={editStatus} onValueChange={setEditStatus}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button className="w-full" onClick={handleEditSave} disabled={loading}>
+              {loading ? "Saving..." : "Save Changes"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteStaff} onOpenChange={(open) => { if (!open) setDeleteStaff(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-display">Remove Staff Member</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to remove <strong>{deleteStaff?.full_name || deleteStaff?.email}</strong>? They will lose access to the business.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-3 justify-end">
+            <Button variant="outline" onClick={() => setDeleteStaff(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteStaff} disabled={loading}>
+              {loading ? "Removing..." : "Remove"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid gap-4 md:grid-cols-3 mb-6">
         {(['admin', 'manager', 'cashier'] as const).map(role => (
@@ -157,11 +305,12 @@ export default function Staff() {
                 <TableHead>Role</TableHead>
                 <TableHead>Branch</TableHead>
                 <TableHead>Status</TableHead>
+                {isAdmin && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {staff.length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No staff members yet. Invite your team!</TableCell></TableRow>
+                <TableRow><TableCell colSpan={isAdmin ? 6 : 5} className="text-center text-muted-foreground py-8">No staff members yet. Invite your team!</TableCell></TableRow>
               ) : staff.map(s => (
                 <TableRow key={s.id}>
                   <TableCell className="font-medium">{s.full_name || 'Unnamed'}</TableCell>
@@ -169,6 +318,20 @@ export default function Staff() {
                   <TableCell><Badge variant="outline" className={roleColors[s.role || ''] || ''}>{s.role}</Badge></TableCell>
                   <TableCell>{s.branch_name}</TableCell>
                   <TableCell><Badge variant="outline" className={getStatusColor(s.status)}>{s.status}</Badge></TableCell>
+                  {isAdmin && (
+                    <TableCell className="text-right">
+                      <div className="flex gap-1 justify-end">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditDialog(s)}>
+                          <Edit className="h-3.5 w-3.5" />
+                        </Button>
+                        {s.id !== profile?.id && (
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteStaff(s)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
