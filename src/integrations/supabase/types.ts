@@ -540,6 +540,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_invitation: { Args: { _email: string }; Returns: boolean }
       get_user_branch_id: { Args: { _user_id: string }; Returns: string }
       get_user_business_id: { Args: { _user_id: string }; Returns: string }
       has_role: {
