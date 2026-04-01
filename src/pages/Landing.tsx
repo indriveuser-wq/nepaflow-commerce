@@ -26,7 +26,7 @@ export default function Landing() {
           </div>
           <div className="flex items-center gap-3">
             <Button variant="ghost" onClick={() => navigate('/login')}>Login</Button>
-            <Button onClick={() => navigate('/signup')}>Get Started</Button>
+            <Button onClick={() => navigate('/setup-business')}>Get Started</Button>
           </div>
         </div>
       </nav>
