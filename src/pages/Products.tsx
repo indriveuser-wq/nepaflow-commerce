@@ -3,12 +3,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Search, Edit, Trash2, Package } from "lucide-react";
 import { formatNPR, getStatusColor } from "@/lib/formatters";
 import { useProductStore, type Product } from "@/stores/product-store";
+import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
 const emptyForm = { name: '', sku: '', barcode: '', category_id: '', cost_price: '', selling_price: '', tax_rate: '13', status: 'active' };
@@ -22,6 +23,8 @@ export default function Products() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const { products, categories, addProduct, updateProduct, deleteProduct } = useProductStore();
+  const { role } = useAuth();
+  const canManage = role === 'admin' || role === 'manager';
 
   const filtered = products.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase());
@@ -91,7 +94,7 @@ export default function Products() {
           <h1 className="text-2xl font-display font-bold tracking-tight">Products</h1>
           <p className="text-muted-foreground text-sm">{products.length} products in catalog</p>
         </div>
-        <Button onClick={openAddForm}><Plus className="h-4 w-4 mr-2" />Add Product</Button>
+        {canManage && <Button onClick={openAddForm}><Plus className="h-4 w-4 mr-2" />Add Product</Button>}
       </div>
 
       {/* Add/Edit Dialog */}
@@ -193,10 +196,12 @@ export default function Products() {
                       <div>
                         <p className="text-base font-bold font-display">{formatNPR(p.selling_price)}</p>
                       </div>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); openEditForm(p); }}><Edit className="h-3.5 w-3.5" /></Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(p.id); }}><Trash2 className="h-3.5 w-3.5" /></Button>
-                      </div>
+                      {canManage && (
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); openEditForm(p); }}><Edit className="h-3.5 w-3.5" /></Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(p.id); }}><Trash2 className="h-3.5 w-3.5" /></Button>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

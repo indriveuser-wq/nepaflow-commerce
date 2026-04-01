@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,24 +7,152 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Search, ArrowRightLeft, Plus, Minus, AlertTriangle, Warehouse } from "lucide-react";
+import { Search, ArrowRightLeft, Plus, AlertTriangle, Warehouse } from "lucide-react";
 import { getStatusColor } from "@/lib/formatters";
-import { mockInventory, mockBranches } from "@/lib/mock-data";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+
+type InventoryRow = {
+  id: string;
+  product_id: string;
+  branch_id: string;
+  quantity: number;
+  low_stock_threshold: number;
+  product_name: string;
+  sku: string;
+  branch_name: string;
+};
 
 export default function Inventory() {
+  const { profile, role } = useAuth();
   const [search, setSearch] = useState("");
   const [branchFilter, setBranchFilter] = useState("all");
   const [showTransfer, setShowTransfer] = useState(false);
   const [showAdjust, setShowAdjust] = useState(false);
+  const [inventory, setInventory] = useState<InventoryRow[]>([]);
+  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
+  const [products, setProducts] = useState<{ id: string; name: string }[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = mockInventory.filter(i => {
+  // Transfer form state
+  const [transferProduct, setTransferProduct] = useState("");
+  const [transferFrom, setTransferFrom] = useState("");
+  const [transferTo, setTransferTo] = useState("");
+  const [transferQty, setTransferQty] = useState("");
+
+  // Adjust form state
+  const [adjustProduct, setAdjustProduct] = useState("");
+  const [adjustBranch, setAdjustBranch] = useState("");
+  const [adjustType, setAdjustType] = useState("");
+  const [adjustQty, setAdjustQty] = useState("");
+  const [adjustReason, setAdjustReason] = useState("");
+
+  const canManage = role === 'admin' || role === 'manager';
+
+  const loadData = useCallback(async () => {
+    if (!profile?.business_id) return;
+
+    const [invRes, branchRes, prodRes] = await Promise.all([
+      supabase
+        .from('inventory_items')
+        .select('id, product_id, branch_id, quantity, low_stock_threshold, products(name, sku), branches(name)')
+        .order('quantity', { ascending: true }),
+      supabase.from('branches').select('id, name').eq('business_id', profile.business_id),
+      supabase.from('products').select('id, name').eq('business_id', profile.business_id),
+    ]);
+
+    setBranches(branchRes.data || []);
+    setProducts(prodRes.data || []);
+
+    const rows: InventoryRow[] = (invRes.data || []).map((r: any) => ({
+      id: r.id,
+      product_id: r.product_id,
+      branch_id: r.branch_id,
+      quantity: r.quantity,
+      low_stock_threshold: r.low_stock_threshold,
+      product_name: r.products?.name || 'Unknown',
+      sku: r.products?.sku || '',
+      branch_name: r.branches?.name || 'Unknown',
+    }));
+
+    setInventory(rows);
+    setLoading(false);
+  }, [profile?.business_id]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const handleTransfer = async () => {
+    if (!transferProduct || !transferFrom || !transferTo || !transferQty || transferFrom === transferTo) {
+      toast.error("Please fill all fields correctly");
+      return;
+    }
+    const qty = Number(transferQty);
+    if (qty <= 0) { toast.error("Quantity must be positive"); return; }
+
+    const source = inventory.find(i => i.product_id === transferProduct && i.branch_id === transferFrom);
+    if (!source || source.quantity < qty) { toast.error("Insufficient stock in source branch"); return; }
+
+    // Decrease source
+    const { error: e1 } = await supabase.from('inventory_items').update({ quantity: source.quantity - qty }).eq('id', source.id);
+    if (e1) { toast.error("Transfer failed: " + e1.message); return; }
+
+    // Increase or create destination
+    const dest = inventory.find(i => i.product_id === transferProduct && i.branch_id === transferTo);
+    if (dest) {
+      await supabase.from('inventory_items').update({ quantity: dest.quantity + qty }).eq('id', dest.id);
+    } else {
+      await supabase.from('inventory_items').insert({ product_id: transferProduct, branch_id: transferTo, quantity: qty });
+    }
+
+    toast.success("Stock transferred");
+    setShowTransfer(false);
+    setTransferProduct(""); setTransferFrom(""); setTransferTo(""); setTransferQty("");
+    await loadData();
+  };
+
+  const handleAdjust = async () => {
+    if (!adjustProduct || !adjustBranch || !adjustType || !adjustQty) {
+      toast.error("Please fill all fields");
+      return;
+    }
+    const qty = Number(adjustQty);
+    if (qty <= 0) { toast.error("Quantity must be positive"); return; }
+
+    const item = inventory.find(i => i.product_id === adjustProduct && i.branch_id === adjustBranch);
+    if (adjustType === 'remove' && (!item || item.quantity < qty)) {
+      toast.error("Insufficient stock to remove");
+      return;
+    }
+
+    if (item) {
+      const newQty = adjustType === 'add' ? item.quantity + qty : item.quantity - qty;
+      const { error } = await supabase.from('inventory_items').update({ quantity: newQty }).eq('id', item.id);
+      if (error) { toast.error("Adjustment failed: " + error.message); return; }
+    } else if (adjustType === 'add') {
+      const { error } = await supabase.from('inventory_items').insert({ product_id: adjustProduct, branch_id: adjustBranch, quantity: qty });
+      if (error) { toast.error("Adjustment failed: " + error.message); return; }
+    }
+
+    toast.success("Stock adjusted");
+    setShowAdjust(false);
+    setAdjustProduct(""); setAdjustBranch(""); setAdjustType(""); setAdjustQty(""); setAdjustReason("");
+    await loadData();
+  };
+
+  const filtered = inventory.filter(i => {
     const matchesSearch = i.product_name.toLowerCase().includes(search.toLowerCase()) || i.sku.toLowerCase().includes(search.toLowerCase());
     const matchesBranch = branchFilter === "all" || i.branch_id === branchFilter;
     return matchesSearch && matchesBranch;
   });
 
   const lowStock = filtered.filter(i => i.quantity <= i.low_stock_threshold);
+
+  if (loading) {
+    return <div className="flex items-center justify-center py-16"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -33,55 +161,71 @@ export default function Inventory() {
           <h1 className="text-2xl font-display font-bold tracking-tight">Inventory</h1>
           <p className="text-muted-foreground text-sm">Manage stock across branches</p>
         </div>
-        <div className="flex gap-2">
-          <Dialog open={showTransfer} onOpenChange={setShowTransfer}>
-            <DialogTrigger asChild><Button variant="outline"><ArrowRightLeft className="h-4 w-4 mr-2" />Transfer</Button></DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle className="font-display">Stock Transfer</DialogTitle></DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-2"><Label>Product</Label><Input placeholder="Search product" /></div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2"><Label>From Branch</Label>
-                    <Select><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                      <SelectContent>{mockBranches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
+        {canManage && (
+          <div className="flex gap-2">
+            <Dialog open={showTransfer} onOpenChange={setShowTransfer}>
+              <DialogTrigger asChild><Button variant="outline"><ArrowRightLeft className="h-4 w-4 mr-2" />Transfer</Button></DialogTrigger>
+              <DialogContent>
+                <DialogHeader><DialogTitle className="font-display">Stock Transfer</DialogTitle></DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2"><Label>Product</Label>
+                    <Select value={transferProduct} onValueChange={setTransferProduct}>
+                      <SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger>
+                      <SelectContent>{products.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2"><Label>To Branch</Label>
-                    <Select><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                      <SelectContent>{mockBranches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2"><Label>From Branch</Label>
+                      <Select value={transferFrom} onValueChange={setTransferFrom}>
+                        <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                        <SelectContent>{branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2"><Label>To Branch</Label>
+                      <Select value={transferTo} onValueChange={setTransferTo}>
+                        <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                        <SelectContent>{branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-2"><Label>Quantity</Label><Input type="number" value={transferQty} onChange={e => setTransferQty(e.target.value)} placeholder="0" /></div>
+                  <Button className="w-full" onClick={handleTransfer}>Transfer Stock</Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+            <Dialog open={showAdjust} onOpenChange={setShowAdjust}>
+              <DialogTrigger asChild><Button variant="outline"><Plus className="h-4 w-4 mr-2" />Adjust</Button></DialogTrigger>
+              <DialogContent>
+                <DialogHeader><DialogTitle className="font-display">Stock Adjustment</DialogTitle></DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2"><Label>Product</Label>
+                    <Select value={adjustProduct} onValueChange={setAdjustProduct}>
+                      <SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger>
+                      <SelectContent>{products.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
-                </div>
-                <div className="space-y-2"><Label>Quantity</Label><Input type="number" placeholder="0" /></div>
-                <Button className="w-full" onClick={() => { setShowTransfer(false); toast.success("Stock transferred"); }}>Transfer Stock</Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-          <Dialog open={showAdjust} onOpenChange={setShowAdjust}>
-            <DialogTrigger asChild><Button variant="outline"><Plus className="h-4 w-4 mr-2" />Adjust</Button></DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle className="font-display">Stock Adjustment</DialogTitle></DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-2"><Label>Product</Label><Input placeholder="Search product" /></div>
-                <div className="space-y-2"><Label>Branch</Label>
-                  <Select><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                    <SelectContent>{mockBranches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2"><Label>Type</Label>
-                    <Select><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                      <SelectContent><SelectItem value="add">Add Stock</SelectItem><SelectItem value="remove">Remove Stock</SelectItem></SelectContent>
+                  <div className="space-y-2"><Label>Branch</Label>
+                    <Select value={adjustBranch} onValueChange={setAdjustBranch}>
+                      <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectContent>{branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2"><Label>Quantity</Label><Input type="number" placeholder="0" /></div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2"><Label>Type</Label>
+                      <Select value={adjustType} onValueChange={setAdjustType}>
+                        <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                        <SelectContent><SelectItem value="add">Add Stock</SelectItem><SelectItem value="remove">Remove Stock</SelectItem></SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2"><Label>Quantity</Label><Input type="number" value={adjustQty} onChange={e => setAdjustQty(e.target.value)} placeholder="0" /></div>
+                  </div>
+                  <div className="space-y-2"><Label>Reason</Label><Input value={adjustReason} onChange={e => setAdjustReason(e.target.value)} placeholder="Reason for adjustment" /></div>
+                  <Button className="w-full" onClick={handleAdjust}>Save Adjustment</Button>
                 </div>
-                <div className="space-y-2"><Label>Reason</Label><Input placeholder="Reason for adjustment" /></div>
-                <Button className="w-full" onClick={() => { setShowAdjust(false); toast.success("Stock adjusted"); }}>Save Adjustment</Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        )}
       </div>
 
       {lowStock.length > 0 && (
@@ -114,7 +258,7 @@ export default function Inventory() {
               <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Branches</SelectItem>
-                {mockBranches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -132,7 +276,9 @@ export default function Inventory() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((item) => {
+              {filtered.length === 0 ? (
+                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No inventory items found</TableCell></TableRow>
+              ) : filtered.map((item) => {
                 const status = item.quantity === 0 ? 'out_of_stock' : item.quantity <= item.low_stock_threshold ? 'low_stock' : 'active';
                 return (
                   <TableRow key={item.id}>
