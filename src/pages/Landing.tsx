@@ -26,7 +26,7 @@ export default function Landing() {
           </div>
           <div className="flex items-center gap-3">
             <Button variant="ghost" onClick={() => navigate('/login')}>Login</Button>
-            <Button onClick={() => navigate('/signup')}>Get Started</Button>
+            <Button onClick={() => navigate('/setup-business')}>Get Started</Button>
           </div>
         </div>
       </nav>
@@ -44,11 +44,11 @@ export default function Landing() {
             Built specifically for Nepali businesses.
           </p>
           <div className="mt-8 flex items-center justify-center gap-4">
-            <Button size="lg" onClick={() => navigate('/signup')} className="text-base px-8">
+            <Button size="lg" onClick={() => navigate('/setup-business')} className="text-base px-8">
               Start Free <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
-            <Button size="lg" variant="outline" onClick={() => navigate('/dashboard')} className="text-base px-8">
-              View Demo
+            <Button size="lg" variant="outline" onClick={() => navigate('/setup-business')} className="text-base px-8">
+              Set Up Business
             </Button>
           </div>
         </div>
@@ -82,7 +82,7 @@ export default function Landing() {
         <div className="max-w-3xl mx-auto text-center">
           <h2 className="text-3xl font-display font-bold tracking-tight">Ready to streamline your business?</h2>
           <p className="text-muted-foreground mt-3">Join hundreds of Nepali businesses using BizNep to manage their commerce operations.</p>
-          <Button size="lg" className="mt-8 text-base px-8" onClick={() => navigate('/signup')}>
+          <Button size="lg" className="mt-8 text-base px-8" onClick={() => navigate('/setup-business')}>
             Get Started Today <ArrowRight className="h-4 w-4 ml-2" />
           </Button>
         </div>

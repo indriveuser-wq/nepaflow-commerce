@@ -9,6 +9,7 @@ import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import SetupBusiness from "./pages/SetupBusiness";
 import Dashboard from "./pages/Dashboard";
 import Products from "./pages/Products";
 import Inventory from "./pages/Inventory";
@@ -46,6 +47,7 @@ const App = () => (
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
+            <Route path="/setup-business" element={<SetupBusiness />} />
             <Route path="/dashboard" element={<P><Dashboard /></P>} />
             <Route path="/products" element={<P><Products /></P>} />
             <Route path="/inventory" element={<P><Inventory /></P>} />
