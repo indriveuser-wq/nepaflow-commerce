@@ -8,88 +8,39 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function Signup() {
-  const [step, setStep] = useState(1);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [businessName, setBusinessName] = useState("");
-  const [businessAddress, setBusinessAddress] = useState("");
-  const [phone, setPhone] = useState("");
-  const [branchName, setBranchName] = useState("");
   const [loading, setLoading] = useState(false);
-  const [isInvited, setIsInvited] = useState(false);
   const navigate = useNavigate();
-
-  const checkInvitation = async () => {
-    const { data } = await supabase
-      .from('staff_invitations')
-      .select('id')
-      .eq('email', email.trim().toLowerCase())
-      .eq('status', 'pending')
-      .limit(1);
-    return data && data.length > 0;
-  };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
 
-    if (step === 1) {
-      setLoading(true);
-      const invited = await checkInvitation();
-      setIsInvited(!!invited);
+    // Check if this email has a pending invitation
+    const { data: invited } = await supabase.rpc('check_invitation', { _email: email.trim().toLowerCase() });
+
+    if (!invited) {
+      toast.error("No invitation found for this email. Ask your business owner to invite you first.");
       setLoading(false);
-
-      if (invited) {
-        // Skip business setup, sign up directly
-        await doSignup(true);
-      } else {
-        setStep(2);
-      }
       return;
     }
 
-    // Step 2 — business setup (only for non-invited users)
-    await doSignup(false);
-  };
-
-  const doSignup = async (invited: boolean) => {
-    setLoading(true);
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { full_name: fullName } },
     });
+
     if (authError || !authData.user) {
       toast.error(authError?.message || "Signup failed");
       setLoading(false);
       return;
     }
 
-    if (invited) {
-      // The handle_new_user trigger takes care of profile, role, and business assignment
-      setLoading(false);
-      toast.success("Account created! You've been added to your team.");
-      navigate('/dashboard');
-      return;
-    }
-
-    // New business owner — call setup RPC
-    const { error: setupErr } = await supabase.rpc('setup_business', {
-      _business_name: businessName,
-      _business_address: businessAddress,
-      _business_phone: phone,
-      _business_email: email,
-      _branch_name: branchName || 'Main Branch',
-      _user_full_name: fullName,
-    });
-    if (setupErr) {
-      toast.error("Failed to set up business: " + setupErr.message);
-      setLoading(false);
-      return;
-    }
-
     setLoading(false);
-    toast.success("Account created! Welcome to BizNep.");
+    toast.success("Account created! You've been added to your team.");
     navigate('/dashboard');
   };
 
@@ -100,34 +51,24 @@ export default function Signup() {
           <div className="flex justify-center mb-4">
             <div className="h-12 w-12 rounded-xl bg-primary flex items-center justify-center text-primary-foreground font-display font-bold text-lg">B</div>
           </div>
-          <CardTitle className="font-display text-2xl">{step === 1 ? "Create Account" : "Set Up Business"}</CardTitle>
-          <CardDescription>{step === 1 ? "Start managing your business" : "Tell us about your business"}</CardDescription>
+          <CardTitle className="font-display text-2xl">Staff Sign Up</CardTitle>
+          <CardDescription>Sign up with the email your business owner invited you with</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSignup} className="space-y-4">
-            {step === 1 ? (
-              <>
-                <div className="space-y-2"><Label>Full Name</Label><Input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Your name" required /></div>
-                <div className="space-y-2"><Label>Email</Label><Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required /></div>
-                <div className="space-y-2"><Label>Password</Label><Input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required minLength={6} /></div>
-              </>
-            ) : (
-              <>
-                <div className="space-y-2"><Label>Business Name</Label><Input value={businessName} onChange={e => setBusinessName(e.target.value)} placeholder="e.g. Himalayan Traders" required /></div>
-                <div className="space-y-2"><Label>Business Address</Label><Input value={businessAddress} onChange={e => setBusinessAddress(e.target.value)} placeholder="e.g. Thamel, Kathmandu" required /></div>
-                <div className="space-y-2"><Label>Phone</Label><Input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+977-..." required /></div>
-                <div className="space-y-2"><Label>Main Branch Name</Label><Input value={branchName} onChange={e => setBranchName(e.target.value)} placeholder="e.g. Kathmandu Main" required /></div>
-              </>
-            )}
+            <div className="space-y-2"><Label>Full Name</Label><Input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Your name" required /></div>
+            <div className="space-y-2"><Label>Email</Label><Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Invited email address" required /></div>
+            <div className="space-y-2"><Label>Password</Label><Input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required minLength={6} /></div>
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Setting up..." : step === 1 ? "Continue" : "Complete Setup"}
+              {loading ? "Creating account..." : "Sign Up"}
             </Button>
           </form>
-          {step === 1 && (
-            <p className="text-center text-sm text-muted-foreground mt-4">
-              Already have an account? <Link to="/login" className="text-primary hover:underline">Sign in</Link>
-            </p>
-          )}
+          <p className="text-center text-sm text-muted-foreground mt-4">
+            Already have an account? <Link to="/login" className="text-primary hover:underline">Sign in</Link>
+          </p>
+          <p className="text-center text-sm text-muted-foreground mt-2">
+            Want to set up a new business? <Link to="/setup-business" className="text-primary hover:underline">Get Started</Link>
+          </p>
         </CardContent>
       </Card>
     </div>
