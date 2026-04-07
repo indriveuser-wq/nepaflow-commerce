@@ -1,183 +1,97 @@
 
 
-# BizNep — All-in-One Commerce Management Platform for Nepal
+## Plan: Fix Staff Removal, Invoice Business Info, and Add Stock Purchase with Vendors
 
-## Overview
-A complete commerce management web app built with React + Vite + Tailwind + shadcn/ui, powered by Supabase (Lovable Cloud) for auth, database, and edge functions. All UI is original — no copied branding or layouts. No subscription/pricing/paywall logic anywhere.
+### Problem Analysis
 
----
+**1. Staff removal fails** — The `profiles` table RLS UPDATE policy only allows `id = auth.uid()`, meaning admins can only update their own profile. When an admin tries to remove another staff member (setting `business_id: null`), the RLS policy blocks it silently.
 
-## Architecture
+**2. Invoice shows wrong business info** — `InvoiceView.tsx` imports hardcoded `mockBusiness` from mock data instead of fetching the real business record from the database.
 
-**Frontend**: React + TypeScript + Vite + Tailwind CSS + shadcn/ui + Radix UI
-**State**: React Query (server state) + Zustand (UI state like POS cart)
-**Forms**: React Hook Form + Zod validation
-**Charts**: Recharts
-**Backend**: Supabase (Lovable Cloud) — Auth, PostgreSQL, Edge Functions, Row Level Security
-**PDF**: Client-side invoice generation
+**3. Stock purchase with vendor tracking** — New feature requiring a `vendors` table and a `stock_purchases` table to record purchase history with vendor details.
 
 ---
 
-## Database Schema (Supabase Tables)
+### Step 1: Fix staff removal/editing via database function
 
-- **businesses** — name, address, phone, email, logo_url, tax_id, currency (NPR default)
-- **branches** — business_id, name, address, phone, is_main
-- **profiles** — user_id (FK auth.users), business_id, full_name, phone, avatar
-- **user_roles** — user_id, role (admin/manager/cashier), branch_id
-- **categories** — business_id, name, description, parent_id
-- **products** — business_id, name, sku, barcode, category_id, cost_price, selling_price, tax_rate, image_url, status, tags
-- **product_variants** — product_id, name, sku, barcode, price_override, attributes (JSONB)
-- **inventory_items** — product_id (or variant_id), branch_id, quantity, low_stock_threshold
-- **inventory_movements** — inventory_item_id, type (in/out/transfer/adjustment), quantity, reference, notes, created_by
-- **customers** — business_id, name, phone, email, address, notes
-- **orders** — business_id, branch_id, customer_id, order_number, status, subtotal, discount, tax, total, payment_status, notes, created_by
-- **order_items** — order_id, product_id (nullable for custom items), variant_id, custom_name, custom_price, quantity, unit_price, discount, total, notes
-- **payments** — order_id, method (cash/qr/manual), amount, reference, status, paid_at
-- **invoices** — order_id, invoice_number, business_info (JSONB), customer_info (JSONB), items (JSONB), totals (JSONB), generated_at
-- **shipments** — order_id, courier, tracking_number, status (pending/picked_up/in_transit/delivered), estimated_delivery, notes
-- **notifications** — user_id, business_id, title, message, type, read, data (JSONB)
+Create a `SECURITY DEFINER` function `admin_update_staff` that allows admins to update other profiles within their business. Also create `admin_remove_staff` to handle the full removal flow (unlink profile + delete role) atomically.
 
----
+**Migration SQL:**
+- `admin_update_staff(_target_user_id, _full_name, _branch_id, _status)` — verifies caller is admin and target is in same business
+- `admin_remove_staff(_target_user_id)` — sets profile inactive, nulls business_id/branch_id, deletes role
 
-## Pages & Modules
+**Code change in `Staff.tsx`:** Replace direct `.update()` / `.delete()` calls with `supabase.rpc('admin_update_staff', ...)` and `supabase.rpc('admin_remove_staff', ...)`.
 
-### 1. Landing Page
-- Hero section with value proposition for Nepal-based businesses
-- Feature highlights (POS, Inventory, Analytics, Multi-branch)
-- CTA to sign up — NO pricing section
+### Step 2: Fix invoice to use real business data
 
-### 2. Auth (Login / Signup / Reset Password)
-- Email + password auth via Supabase
-- Post-signup onboarding: business name, branch setup
+**`InvoiceView.tsx`:** Remove `mockBusiness` import. Fetch the business record from `businesses` table using the authenticated user's `profile.business_id`. Also fetch the order from the `orders` + `order_items` tables instead of using the mock order store.
 
-### 3. Dashboard
-- Revenue cards (today, this week, this month)
-- Orders summary (pending, completed, cancelled)
-- Sales trend chart (Recharts line chart)
-- Top 5 products bar chart
-- Low stock alerts list
-- Recent orders table
-- Branch performance comparison (if multi-branch)
+### Step 3: Create vendors table
 
-### 4. Products Module
-- Product list with search, filter by category/status, sort
-- Create/edit product form (name, SKU, barcode, category, prices, image, variants)
-- Bulk actions (delete, update status)
-- Category management sub-page
+**Migration:**
+```sql
+CREATE TABLE public.vendors (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id uuid NOT NULL,
+  name text NOT NULL,
+  phone text,
+  email text,
+  address text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
 
-### 5. Inventory Module
-- Stock levels table per branch
-- Stock transfer form (branch to branch)
-- Stock adjustment form (add/remove with reason)
-- Low stock alerts dashboard
-- Movement history log with filters
+ALTER TABLE public.vendors ENABLE ROW LEVEL SECURITY;
 
-### 6. Orders Module
-- Order list with status filters, search, date range
-- Order detail page: items, payment, delivery timeline, status updates
-- Manual order creation form
-- Order status workflow (pending → confirmed → processing → completed/cancelled)
+-- Members can read vendors in their business
+CREATE POLICY "Members can read vendors" ON public.vendors
+  FOR SELECT TO authenticated
+  USING (business_id = get_user_business_id(auth.uid()));
 
-### 7. POS System (Advanced)
-- Split layout: product grid/search on left, cart on right
-- Quick product search + barcode-ready input field
-- Add to cart with quantity adjustment
-- **Custom product entry**: name + price + optional quantity + optional note — appears only in that order, not saved to product DB
-- Cart supports mix of catalog products + custom items
-- Customer selector (search existing or create new inline)
-- Discount support (% or fixed, per-item or order-level)
-- Payment: select method (cash, QR, manual), enter amount, calculate change
-- Checkout generates order + invoice automatically
-- Print/download invoice after checkout
+-- Admin/manager can manage vendors
+CREATE POLICY "Admin/manager manage vendors" ON public.vendors
+  FOR ALL TO authenticated
+  USING (business_id = get_user_business_id(auth.uid()) AND is_admin_or_manager(auth.uid()));
+```
 
-### 8. Customer Module
-- Customer list with search
-- Customer profile page:
-  - Info card (name, phone, email, address)
-  - Stats: total spend, order count, last purchase
-  - Transaction history table (all orders)
-  - Payment history
-  - Notes section (add/edit notes)
-  - Invoice list with view/download per order
+### Step 4: Create stock_purchases table
 
-### 9. Invoices
-- Auto-generated on order completion
-- Includes: business info, customer info, all items (including custom POS items), subtotal, discount, tax, total, payment method, date
-- PDF-ready view with download button
-- Invoice number auto-increment
+**Migration:**
+```sql
+CREATE TABLE public.stock_purchases (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id uuid NOT NULL,
+  branch_id uuid NOT NULL,
+  product_id uuid NOT NULL,
+  vendor_id uuid REFERENCES public.vendors(id),
+  quantity integer NOT NULL,
+  purchase_price numeric NOT NULL DEFAULT 0,
+  purchase_date date NOT NULL DEFAULT CURRENT_DATE,
+  notes text,
+  created_by uuid,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
 
-### 10. Payments Module
-- Transaction log (all payments across orders)
-- Filter by method, status, date range
-- Payment status tracking (pending/completed/failed)
-- Manual payment recording
+ALTER TABLE public.stock_purchases ENABLE ROW LEVEL SECURITY;
 
-### 11. Logistics / Delivery
-- Delivery list with status filters
-- Create delivery for an order
-- Status updates (pending → picked up → in transit → delivered)
-- Courier and tracking number fields
+-- Similar RLS policies scoped to business
+```
 
-### 12. Analytics & Reports
-- Sales report with date range picker
-- Revenue trend line chart
-- Top products bar chart
-- Branch comparison chart
-- Payment method breakdown pie chart
-- Export-ready table views
+### Step 5: Add "Add Stock" dialog to Inventory page
 
-### 13. Staff & Roles
-- Staff list with role badges
-- Invite staff (email)
-- Role assignment (Admin / Manager / Cashier)
-- Role-based access control on routes and actions
+Enhance `Inventory.tsx` with a new "Add Stock" dialog containing:
+- **Product selection** — dropdown of existing products, or fields to create a new product (name, SKU)
+- **Quantity and purchase price** inputs
+- **Branch selection** dropdown
+- **Purchase date** — date picker defaulting to today
+- **Vendor section:**
+  - A combined dropdown/input: if vendors exist, show a searchable dropdown with an "Add new vendor" option
+  - When "new vendor" is selected, show inline fields for vendor name, phone (optional), email (optional)
+- On submit: create vendor if new, insert `stock_purchases` record, and upsert `inventory_items` (increase quantity or create new row)
+- Immediately refresh inventory list after submission
 
-### 14. Settings
-- Business info (name, logo, address, tax ID)
-- Branch management (add/edit/delete branches)
-- Receipt/invoice customization (logo, footer text)
-- Tax settings placeholder
-- Notification preferences
-
----
-
-## Design System
-- Sidebar navigation with collapsible icon mode
-- Light & dark mode toggle
-- Card-based dashboard layout
-- Loading skeletons on all data-fetching views
-- Toast notifications for all actions
-- Empty states with illustrations
-- Responsive: desktop sidebar, mobile bottom nav or sheet
-- Nepali Rupee (NPR) formatting throughout
-
----
-
-## Demo/Seed Data
-- 20+ sample products across categories (electronics, clothing, grocery)
-- 10+ customers with varied purchase histories
-- 30+ orders with mixed statuses
-- Payment records across methods
-- Inventory across 2 sample branches
-- All with Nepal-relevant context (Kathmandu, Pokhara branches, NPR currency)
-
----
-
-## Implementation Order
-1. Set up Lovable Cloud backend + database schema + RLS policies
-2. Auth + onboarding flow
-3. App shell (sidebar, routing, theme toggle)
-4. Dashboard with charts
-5. Products + Categories CRUD
-6. Inventory management
-7. Orders system
-8. POS system with custom products + invoicing
-9. Customer module with profiles
-10. Payments module
-11. Logistics module
-12. Analytics/Reports
-13. Staff & roles
-14. Settings
-15. Landing page
-16. Seed data
+### Files to modify
+- **New migration** — `admin_update_staff`, `admin_remove_staff` functions + `vendors` table + `stock_purchases` table
+- **`src/pages/Staff.tsx`** — use RPC calls for edit/remove
+- **`src/pages/InvoiceView.tsx`** — fetch real business + order data from DB
+- **`src/pages/Inventory.tsx`** — add "Add Stock" dialog with vendor support
 
