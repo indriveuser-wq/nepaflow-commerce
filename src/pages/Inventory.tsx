@@ -228,7 +228,7 @@ export default function Inventory() {
             <AddStockDialog businessId={profile!.business_id!} products={products} branches={branches} onComplete={loadData} />
           </div>
         )}
-
+      </div>
       {lowStock.length > 0 && (
         <Card className="border-warning/30 bg-warning/5">
           <CardHeader className="pb-2">
