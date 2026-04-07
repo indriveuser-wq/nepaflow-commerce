@@ -517,6 +517,77 @@ export type Database = {
           },
         ]
       }
+      stock_purchases: {
+        Row: {
+          branch_id: string
+          business_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          product_id: string
+          purchase_date: string
+          purchase_price: number
+          quantity: number
+          vendor_id: string | null
+        }
+        Insert: {
+          branch_id: string
+          business_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          product_id: string
+          purchase_date?: string
+          purchase_price?: number
+          quantity: number
+          vendor_id?: string | null
+        }
+        Update: {
+          branch_id?: string
+          business_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          product_id?: string
+          purchase_date?: string
+          purchase_price?: number
+          quantity?: number
+          vendor_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_purchases_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_purchases_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_purchases_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_purchases_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           id: string
@@ -535,11 +606,63 @@ export type Database = {
         }
         Relationships: []
       }
+      vendors: {
+        Row: {
+          address: string | null
+          business_id: string
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          phone: string | null
+        }
+        Insert: {
+          address?: string | null
+          business_id: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          phone?: string | null
+        }
+        Update: {
+          address?: string | null
+          business_id?: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          phone?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendors_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      admin_remove_staff: {
+        Args: { _target_user_id: string }
+        Returns: undefined
+      }
+      admin_update_staff: {
+        Args: {
+          _branch_id?: string
+          _full_name?: string
+          _role?: Database["public"]["Enums"]["app_role"]
+          _status?: string
+          _target_user_id: string
+        }
+        Returns: undefined
+      }
       check_invitation: { Args: { _email: string }; Returns: boolean }
       get_user_branch_id: { Args: { _user_id: string }; Returns: string }
       get_user_business_id: { Args: { _user_id: string }; Returns: string }
