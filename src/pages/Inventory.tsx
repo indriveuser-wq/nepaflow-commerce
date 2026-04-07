@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Search, ArrowRightLeft, Plus, AlertTriangle, Warehouse } from "lucide-react";
+import AddStockDialog from "@/components/inventory/AddStockDialog";
 import { getStatusColor } from "@/lib/formatters";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -224,7 +225,7 @@ export default function Inventory() {
                 </div>
               </DialogContent>
             </Dialog>
-          </div>
+            <AddStockDialog businessId={profile!.business_id!} products={products} branches={branches} onComplete={loadData} />
         )}
       </div>
 
