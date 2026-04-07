@@ -115,38 +115,23 @@ export default function Staff() {
     if (!editingStaff) return;
     setLoading(true);
 
-    // Update profile (name, branch, status)
-    const { error: profileError } = await supabase.from('profiles').update({
-      full_name: editName,
-      branch_id: editBranch || null,
-      status: editStatus,
-    }).eq('id', editingStaff.id);
+    const { error } = await supabase.rpc('admin_update_staff', {
+      _target_user_id: editingStaff.id,
+      _full_name: editName || null,
+      _branch_id: editBranch || null,
+      _status: editStatus || null,
+      _role: (editRole && editRole !== editingStaff.role ? editRole : null) as any,
+    });
 
-    if (profileError) {
-      toast.error("Failed to update staff: " + profileError.message);
-      setLoading(false);
+    setLoading(false);
+    if (error) {
+      toast.error("Failed to update staff: " + error.message);
       return;
-    }
-
-    // Update role if changed
-    if (editRole && editRole !== editingStaff.role) {
-      // Delete existing role then insert new one
-      await supabase.from('user_roles').delete().eq('user_id', editingStaff.id);
-      const { error: roleError } = await supabase.from('user_roles').insert({
-        user_id: editingStaff.id,
-        role: editRole as any,
-      });
-      if (roleError) {
-        toast.error("Failed to update role: " + roleError.message);
-        setLoading(false);
-        return;
-      }
     }
 
     toast.success("Staff member updated");
     setShowEdit(false);
     setEditingStaff(null);
-    setLoading(false);
     await loadData();
   };
 
@@ -154,15 +139,9 @@ export default function Staff() {
     if (!deleteStaff) return;
     setLoading(true);
 
-    // Remove role
-    await supabase.from('user_roles').delete().eq('user_id', deleteStaff.id);
-
-    // Set profile status to inactive and unlink from business
-    const { error } = await supabase.from('profiles').update({
-      status: 'inactive',
-      business_id: null,
-      branch_id: null,
-    }).eq('id', deleteStaff.id);
+    const { error } = await supabase.rpc('admin_remove_staff', {
+      _target_user_id: deleteStaff.id,
+    });
 
     setLoading(false);
     if (error) {

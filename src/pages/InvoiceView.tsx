@@ -1,27 +1,63 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Download, Printer } from "lucide-react";
 import { formatNPR, formatDateTime } from "@/lib/formatters";
-import { mockBusiness } from "@/lib/mock-data";
-import { useProductStore } from "@/stores/product-store";
-import { useOrderStore } from "@/stores/order-store";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+
+type Business = { name: string; address: string | null; phone: string | null; email: string | null; tax_id: string | null };
+type OrderRow = { id: string; order_number: string; customer_name: string; created_at: string; subtotal: number; discount: number; total: number; payment_method: string };
+type OrderItem = { id: string; product_id: string | null; custom_name: string | null; unit_price: number; quantity: number; discount: number; total: number; notes: string | null };
 
 export default function InvoiceView() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { products } = useProductStore();
-  const order = useOrderStore(s => s.orders.find(o => o.id === id));
+  const { profile } = useAuth();
+  const [business, setBusiness] = useState<Business | null>(null);
+  const [order, setOrder] = useState<OrderRow | null>(null);
+  const [items, setItems] = useState<OrderItem[]>([]);
+  const [productNames, setProductNames] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
 
-  if (!order) return (
+  useEffect(() => {
+    if (!id || !profile?.business_id) return;
+    const load = async () => {
+      const [bizRes, orderRes, itemsRes] = await Promise.all([
+        supabase.from('businesses').select('name, address, phone, email, tax_id').eq('id', profile.business_id!).single(),
+        supabase.from('orders').select('*').eq('id', id).single(),
+        supabase.from('order_items').select('*').eq('order_id', id),
+      ]);
+      setBusiness(bizRes.data as Business | null);
+      setOrder(orderRes.data as OrderRow | null);
+      const orderItems = (itemsRes.data || []) as OrderItem[];
+      setItems(orderItems);
+
+      // Fetch product names for items with product_id
+      const productIds = orderItems.map(i => i.product_id).filter(Boolean) as string[];
+      if (productIds.length > 0) {
+        const { data } = await supabase.from('products').select('id, name').in('id', productIds);
+        const map: Record<string, string> = {};
+        (data || []).forEach((p: any) => { map[p.id] = p.name; });
+        setProductNames(map);
+      }
+      setLoading(false);
+    };
+    load();
+  }, [id, profile?.business_id]);
+
+  if (loading) return <div className="flex items-center justify-center py-16"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+
+  if (!order || !business) return (
     <div className="flex flex-col items-center justify-center py-20">
       <p className="text-muted-foreground">Invoice not found</p>
       <Button variant="outline" className="mt-4" onClick={() => navigate('/orders')}>Back</Button>
     </div>
   );
 
-  const invoiceNumber = `INV-2026-${order.id.padStart(4, '0')}`;
+  const invoiceNumber = `INV-${order.order_number}`;
 
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
@@ -35,14 +71,13 @@ export default function InvoiceView() {
 
       <Card className="print:shadow-none print:border-0" id="invoice">
         <CardContent className="p-8">
-          {/* Header */}
           <div className="flex justify-between items-start mb-8">
             <div>
-              <h1 className="text-3xl font-display font-bold text-primary">{mockBusiness.name}</h1>
-              <p className="text-sm text-muted-foreground mt-1">{mockBusiness.address}</p>
-              <p className="text-sm text-muted-foreground">{mockBusiness.phone}</p>
-              <p className="text-sm text-muted-foreground">{mockBusiness.email}</p>
-              <p className="text-sm text-muted-foreground">PAN: {mockBusiness.tax_id}</p>
+              <h1 className="text-3xl font-display font-bold text-primary">{business.name}</h1>
+              {business.address && <p className="text-sm text-muted-foreground mt-1">{business.address}</p>}
+              {business.phone && <p className="text-sm text-muted-foreground">{business.phone}</p>}
+              {business.email && <p className="text-sm text-muted-foreground">{business.email}</p>}
+              {business.tax_id && <p className="text-sm text-muted-foreground">PAN: {business.tax_id}</p>}
             </div>
             <div className="text-right">
               <h2 className="text-2xl font-display font-bold">INVOICE</h2>
@@ -52,13 +87,11 @@ export default function InvoiceView() {
             </div>
           </div>
 
-          {/* Customer */}
           <div className="bg-accent/50 rounded-lg p-4 mb-6">
             <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Bill To</p>
             <p className="font-medium">{order.customer_name}</p>
           </div>
 
-          {/* Items */}
           <table className="w-full text-sm mb-6">
             <thead>
               <tr className="border-b">
@@ -70,10 +103,10 @@ export default function InvoiceView() {
               </tr>
             </thead>
             <tbody>
-              {order.items.map(item => (
+              {items.map(item => (
                 <tr key={item.id} className="border-b border-border/50">
                   <td className="py-2">
-                    {item.custom_name || products.find(p => p.id === item.product_id)?.name || `Product #${item.product_id}`}
+                    {item.custom_name || (item.product_id && productNames[item.product_id]) || 'Product'}
                     {item.custom_name && <span className="text-xs text-muted-foreground ml-1">(Custom)</span>}
                     {item.notes && <p className="text-xs text-muted-foreground">{item.notes}</p>}
                   </td>
@@ -86,7 +119,6 @@ export default function InvoiceView() {
             </tbody>
           </table>
 
-          {/* Totals */}
           <div className="flex justify-end">
             <div className="w-64 space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatNPR(order.subtotal)}</span></div>
@@ -96,11 +128,10 @@ export default function InvoiceView() {
             </div>
           </div>
 
-          {/* Footer */}
           <div className="mt-8 pt-6 border-t text-center text-xs text-muted-foreground">
             <p>Payment Method: <span className="capitalize">{order.payment_method}</span></p>
             <p className="mt-2">Thank you for your business!</p>
-            <p>{mockBusiness.name} · {mockBusiness.address} · {mockBusiness.phone}</p>
+            <p>{business.name} · {business.address || ''} · {business.phone || ''}</p>
           </div>
         </CardContent>
       </Card>
