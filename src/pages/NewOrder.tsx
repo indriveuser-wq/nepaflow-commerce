@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,11 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { ArrowLeft, Plus, Trash2, Search, UserPlus } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Search } from "lucide-react";
 import { formatNPR } from "@/lib/formatters";
-import { mockCustomers, mockBranches, type OrderItem } from "@/lib/mock-data";
-import { useProductStore } from "@/stores/product-store";
-import { useOrderStore } from "@/stores/order-store";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
 type LineItem = {
@@ -26,28 +25,52 @@ type LineItem = {
   discount: number;
 };
 
+type ProductRow = { id: string; name: string; sku: string | null; selling_price: number; status: string };
+type CustomerRow = { id: string; name: string; phone: string | null };
+type BranchRow = { id: string; name: string };
+
 export default function NewOrder() {
   const navigate = useNavigate();
-  const { products } = useProductStore();
-  const { addOrder, getNextOrderNumber } = useOrderStore();
+  const { profile, user } = useAuth();
 
   const [items, setItems] = useState<LineItem[]>([]);
   const [customerId, setCustomerId] = useState<string>("");
-  const [branchId, setBranchId] = useState("1");
   const [notes, setNotes] = useState("");
   const [orderDiscount, setOrderDiscount] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [showProductPicker, setShowProductPicker] = useState(false);
   const [productSearch, setProductSearch] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const [products, setProducts] = useState<ProductRow[]>([]);
+  const [customers, setCustomers] = useState<CustomerRow[]>([]);
+  const [branches, setBranches] = useState<BranchRow[]>([]);
+  const [branchId, setBranchId] = useState<string>("");
+
+  useEffect(() => {
+    if (!profile?.business_id) return;
+    Promise.all([
+      supabase.from('products').select('id, name, sku, selling_price, status').eq('business_id', profile.business_id!),
+      supabase.from('customers').select('id, name, phone').eq('business_id', profile.business_id!),
+      supabase.from('branches').select('id, name').eq('business_id', profile.business_id!),
+    ]).then(([prodRes, custRes, branchRes]) => {
+      setProducts((prodRes.data || []) as ProductRow[]);
+      setCustomers((custRes.data || []) as CustomerRow[]);
+      const br = (branchRes.data || []) as BranchRow[];
+      setBranches(br);
+      if (profile.branch_id) setBranchId(profile.branch_id);
+      else if (br.length > 0) setBranchId(br[0].id);
+    });
+  }, [profile?.business_id]);
 
   const activeProducts = products.filter(p => p.status === 'active');
   const filteredPickerProducts = activeProducts.filter(p =>
-    p.name.toLowerCase().includes(productSearch.toLowerCase()) || p.sku.toLowerCase().includes(productSearch.toLowerCase())
+    p.name.toLowerCase().includes(productSearch.toLowerCase()) || (p.sku || '').toLowerCase().includes(productSearch.toLowerCase())
   );
 
-  const customer = mockCustomers.find(c => c.id === customerId);
+  const customer = customers.find(c => c.id === customerId);
 
-  const addLineItem = (product: typeof products[0]) => {
+  const addLineItem = (product: ProductRow) => {
     const existing = items.find(i => i.product_id === product.id);
     if (existing) {
       setItems(items.map(i => i.id === existing.id ? { ...i, quantity: i.quantity + 1 } : i));
@@ -73,45 +96,56 @@ export default function NewOrder() {
   const subtotal = useMemo(() => items.reduce((sum, i) => sum + (i.unit_price * i.quantity - i.discount), 0), [items]);
   const total = useMemo(() => subtotal - orderDiscount, [subtotal, orderDiscount]);
 
-  const handleSubmit = (status: string) => {
+  const handleSubmit = async (status: string) => {
     if (items.length === 0) { toast.error("Add at least one item"); return; }
     if (items.some(i => !i.name || i.unit_price <= 0)) { toast.error("All items need a name and price"); return; }
+    if (!profile?.business_id || !branchId) { toast.error("Business not configured"); return; }
 
-    const branchCode = branchId === '1' ? 'KTM' : 'PKR';
-    const orderNumber = getNextOrderNumber(branchCode);
+    setSubmitting(true);
+    try {
+      const { count } = await supabase.from('orders').select('*', { count: 'exact', head: true }).eq('business_id', profile.business_id);
+      const orderNumber = `BN-${String((count || 0) + 1).padStart(3, '0')}`;
 
-    const orderItems: OrderItem[] = items.map(i => ({
-      id: crypto.randomUUID(),
-      product_id: i.product_id,
-      custom_name: i.product_id ? null : i.name,
-      custom_price: i.product_id ? null : i.unit_price,
-      quantity: i.quantity,
-      unit_price: i.unit_price,
-      discount: i.discount,
-      total: i.unit_price * i.quantity - i.discount,
-      notes: '',
-    }));
+      const { data: order, error: orderError } = await supabase.from('orders').insert({
+        order_number: orderNumber,
+        business_id: profile.business_id,
+        branch_id: branchId,
+        customer_id: customerId || null,
+        customer_name: customer?.name || 'Walk-in Customer',
+        status,
+        subtotal,
+        discount: orderDiscount,
+        tax: 0,
+        total,
+        payment_status: status === 'completed' ? 'paid' : 'pending',
+        payment_method: paymentMethod,
+        notes: notes || null,
+        created_by: user?.id || null,
+      }).select('id').single();
 
-    addOrder({
-      order_number: orderNumber,
-      customer_id: customerId || null,
-      customer_name: customer?.name || 'Walk-in Customer',
-      branch_id: branchId,
-      status,
-      subtotal,
-      discount: orderDiscount,
-      tax: 0,
-      total,
-      payment_status: status === 'completed' ? 'paid' : 'pending',
-      payment_method: paymentMethod,
-      items: orderItems,
-      notes,
-      created_at: new Date().toISOString(),
-      created_by: 'admin',
-    });
+      if (orderError) throw orderError;
 
-    toast.success(`Order ${orderNumber} created`);
-    navigate('/orders');
+      const orderItems = items.map(i => ({
+        order_id: order.id,
+        product_id: i.product_id,
+        custom_name: i.product_id ? null : i.name,
+        custom_price: i.product_id ? null : i.unit_price,
+        quantity: i.quantity,
+        unit_price: i.unit_price,
+        discount: i.discount,
+        total: i.unit_price * i.quantity - i.discount,
+      }));
+
+      const { error: itemsError } = await supabase.from('order_items').insert(orderItems);
+      if (itemsError) throw itemsError;
+
+      toast.success(`Order ${orderNumber} created`);
+      navigate('/orders');
+    } catch (err: any) {
+      toast.error(err.message || "Failed to create order");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -125,7 +159,6 @@ export default function NewOrder() {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
-        {/* Left: Items */}
         <div className="lg:col-span-2 space-y-4">
           <Card>
             <CardHeader className="pb-3">
@@ -192,7 +225,6 @@ export default function NewOrder() {
             </CardContent>
           </Card>
 
-          {/* Notes */}
           <Card>
             <CardHeader className="pb-3"><CardTitle className="font-display text-lg">Notes</CardTitle></CardHeader>
             <CardContent>
@@ -201,7 +233,6 @@ export default function NewOrder() {
           </Card>
         </div>
 
-        {/* Right: Summary */}
         <div className="space-y-4">
           <Card>
             <CardHeader className="pb-3"><CardTitle className="font-display text-lg">Customer</CardTitle></CardHeader>
@@ -209,15 +240,15 @@ export default function NewOrder() {
               <Select value={customerId} onValueChange={setCustomerId}>
                 <SelectTrigger><SelectValue placeholder="Walk-in Customer" /></SelectTrigger>
                 <SelectContent>
-                  {mockCustomers.map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.name} — {c.phone}</SelectItem>
+                  {customers.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.name} — {c.phone || 'No phone'}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               {customer && (
                 <div className="text-sm bg-accent/50 rounded-lg p-2">
                   <p className="font-medium">{customer.name}</p>
-                  <p className="text-muted-foreground text-xs">{customer.phone} · {customer.address}</p>
+                  <p className="text-muted-foreground text-xs">{customer.phone || ''}</p>
                 </div>
               )}
             </CardContent>
@@ -230,7 +261,7 @@ export default function NewOrder() {
                 <Label>Branch</Label>
                 <Select value={branchId} onValueChange={setBranchId}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{mockBranches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
+                  <SelectContent>{branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
@@ -258,15 +289,14 @@ export default function NewOrder() {
               <Separator />
               <div className="flex justify-between font-bold text-lg"><span>Total</span><span>{formatNPR(total)}</span></div>
               <div className="flex gap-2 pt-2">
-                <Button variant="outline" className="flex-1" onClick={() => handleSubmit('pending')}>Save as Draft</Button>
-                <Button className="flex-1" onClick={() => handleSubmit('completed')}>Complete Order</Button>
+                <Button variant="outline" className="flex-1" onClick={() => handleSubmit('pending')} disabled={submitting}>Save as Draft</Button>
+                <Button className="flex-1" onClick={() => handleSubmit('completed')} disabled={submitting}>Complete Order</Button>
               </div>
             </CardContent>
           </Card>
         </div>
       </div>
 
-      {/* Product Picker Dialog */}
       <Dialog open={showProductPicker} onOpenChange={setShowProductPicker}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
