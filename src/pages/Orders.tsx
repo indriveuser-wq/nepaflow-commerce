@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -8,19 +8,50 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Eye, ShoppingCart, Plus } from "lucide-react";
 import { formatNPR, formatDate, getStatusColor } from "@/lib/formatters";
-import { useOrderStore } from "@/stores/order-store";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+
+type OrderRow = {
+  id: string;
+  order_number: string;
+  customer_name: string;
+  created_at: string;
+  status: string;
+  payment_status: string;
+  total: number;
+};
 
 export default function Orders() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-  const { orders } = useOrderStore();
+  const { profile } = useAuth();
+
+  useEffect(() => {
+    if (!profile?.business_id) return;
+    const load = async () => {
+      const { data } = await supabase
+        .from('orders')
+        .select('id, order_number, customer_name, created_at, status, payment_status, total')
+        .eq('business_id', profile.business_id!)
+        .order('created_at', { ascending: false });
+      setOrders((data as OrderRow[]) || []);
+      setLoading(false);
+    };
+    load();
+  }, [profile?.business_id]);
 
   const filtered = orders.filter(o => {
     const matchesSearch = o.order_number.toLowerCase().includes(search.toLowerCase()) || o.customer_name.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === "all" || o.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  if (loading) {
+    return <div className="flex items-center justify-center py-16"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+  }
 
   return (
     <div className="space-y-6">

@@ -7,12 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Minus, Trash2, User, ShoppingBag, CreditCard, Banknote, QrCode } from "lucide-react";
 import { formatNPR } from "@/lib/formatters";
-import { mockCustomers } from "@/lib/mock-data";
 import { usePOSStore } from "@/stores/pos-store";
-import { useOrderStore } from "@/stores/order-store";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface POSCartProps {
   className?: string;
@@ -27,12 +27,21 @@ export function POSCart({ className }: POSCartProps) {
   const [customPrice, setCustomPrice] = useState("");
   const [customQty, setCustomQty] = useState("1");
   const [customNote, setCustomNote] = useState("");
+  const [customers, setCustomers] = useState<{ id: string; name: string; phone: string | null }[]>([]);
+  const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
   const store = usePOSStore();
-  const { addOrder, getNextOrderNumber } = useOrderStore();
+  const { profile, user } = useAuth();
 
-  const filteredCustomers = mockCustomers.filter(c =>
-    c.name.toLowerCase().includes(customerSearch.toLowerCase()) || c.phone.includes(customerSearch)
+  useEffect(() => {
+    if (!profile?.business_id) return;
+    supabase.from('customers').select('id, name, phone').eq('business_id', profile.business_id).then(({ data }) => {
+      setCustomers((data || []) as { id: string; name: string; phone: string | null }[]);
+    });
+  }, [profile?.business_id]);
+
+  const filteredCustomers = customers.filter(c =>
+    c.name.toLowerCase().includes(customerSearch.toLowerCase()) || (c.phone || '').includes(customerSearch)
   );
 
   const addCustomProduct = () => {
@@ -42,25 +51,39 @@ export function POSCart({ className }: POSCartProps) {
     toast.success("Custom item added");
   };
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (store.items.length === 0) { toast.error("Cart is empty"); return; }
     if (store.amountPaid < store.getTotal() && store.paymentMethod === 'cash') { toast.error("Insufficient payment"); return; }
+    if (!profile?.business_id || !profile?.branch_id) { toast.error("Business not configured"); return; }
 
-    const orderNumber = getNextOrderNumber('KTM');
-    addOrder({
-      order_number: orderNumber,
-      customer_id: store.customer?.id || null,
-      customer_name: store.customer?.name || 'Walk-in Customer',
-      branch_id: '1',
-      status: 'completed',
-      subtotal: store.getSubtotal(),
-      discount: store.orderDiscount,
-      tax: 0,
-      total: store.getTotal(),
-      payment_status: 'paid',
-      payment_method: store.paymentMethod,
-      items: store.items.map(i => ({
-        id: crypto.randomUUID(),
+    setSubmitting(true);
+    try {
+      // Generate order number
+      const { count } = await supabase.from('orders').select('*', { count: 'exact', head: true }).eq('business_id', profile.business_id);
+      const orderNumber = `BN-${String((count || 0) + 1).padStart(3, '0')}`;
+
+      // Insert order
+      const { data: order, error: orderError } = await supabase.from('orders').insert({
+        order_number: orderNumber,
+        business_id: profile.business_id,
+        branch_id: profile.branch_id,
+        customer_id: store.customer?.id || null,
+        customer_name: store.customer?.name || 'Walk-in Customer',
+        status: 'completed',
+        subtotal: store.getSubtotal(),
+        discount: store.orderDiscount,
+        tax: 0,
+        total: store.getTotal(),
+        payment_status: 'paid',
+        payment_method: store.paymentMethod,
+        created_by: user?.id || null,
+      }).select('id').single();
+
+      if (orderError) throw orderError;
+
+      // Insert order items
+      const orderItems = store.items.map(i => ({
+        order_id: order.id,
         product_id: i.product_id,
         custom_name: i.is_custom ? i.name : null,
         custom_price: i.is_custom ? i.price : null,
@@ -68,17 +91,21 @@ export function POSCart({ className }: POSCartProps) {
         unit_price: i.price,
         discount: i.discount,
         total: i.price * i.quantity - i.discount,
-        notes: i.notes,
-      })),
-      notes: '',
-      created_at: new Date().toISOString(),
-      created_by: 'admin',
-    });
+        notes: i.notes || null,
+      }));
 
-    toast.success(`Order ${orderNumber} completed!`);
-    store.clearCart();
-    setShowPayment(false);
-    navigate('/orders');
+      const { error: itemsError } = await supabase.from('order_items').insert(orderItems);
+      if (itemsError) throw itemsError;
+
+      toast.success(`Order ${orderNumber} completed!`);
+      store.clearCart();
+      setShowPayment(false);
+      navigate('/orders');
+    } catch (err: any) {
+      toast.error(err.message || "Failed to create order");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -127,10 +154,11 @@ export function POSCart({ className }: POSCartProps) {
               <Input placeholder="Search by name or phone..." value={customerSearch} onChange={e => setCustomerSearch(e.target.value)} />
               <div className="max-h-60 overflow-auto space-y-1 mt-2">
                 {filteredCustomers.map(c => (
-                  <div key={c.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-accent cursor-pointer" onClick={() => { store.setCustomer({ id: c.id, name: c.name, phone: c.phone }); setShowCustomerSearch(false); }}>
+                  <div key={c.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-accent cursor-pointer" onClick={() => { store.setCustomer({ id: c.id, name: c.name, phone: c.phone || '' }); setShowCustomerSearch(false); }}>
                     <div><p className="text-sm font-medium">{c.name}</p><p className="text-xs text-muted-foreground">{c.phone}</p></div>
                   </div>
                 ))}
+                {filteredCustomers.length === 0 && <p className="text-center py-4 text-muted-foreground text-sm">No customers found</p>}
               </div>
             </DialogContent>
           </Dialog>
@@ -220,7 +248,9 @@ export function POSCart({ className }: POSCartProps) {
                       )}
                     </div>
                   )}
-                  <Button className="w-full" size="lg" onClick={handleCheckout}>Complete Order</Button>
+                  <Button className="w-full" size="lg" onClick={handleCheckout} disabled={submitting}>
+                    {submitting ? 'Processing...' : 'Complete Order'}
+                  </Button>
                 </div>
               </DialogContent>
             </Dialog>
