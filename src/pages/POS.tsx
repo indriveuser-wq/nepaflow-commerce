@@ -1,31 +1,48 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, ShoppingBag, ShoppingCart } from "lucide-react";
 import { formatNPR } from "@/lib/formatters";
-import { useProductStore } from "@/stores/product-store";
 import { usePOSStore } from "@/stores/pos-store";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { POSCart } from "@/components/pos/POSCart";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+
+type ProductRow = { id: string; name: string; sku: string | null; barcode: string | null; category_id: string | null; selling_price: number; status: string };
+type CategoryRow = { id: string; name: string };
 
 export default function POS() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const store = usePOSStore();
-  const { products, categories } = useProductStore();
   const isMobile = useIsMobile();
+  const { profile } = useAuth();
+  const [products, setProducts] = useState<ProductRow[]>([]);
+  const [categories, setCategories] = useState<CategoryRow[]>([]);
+
+  useEffect(() => {
+    if (!profile?.business_id) return;
+    Promise.all([
+      supabase.from('products').select('id, name, sku, barcode, category_id, selling_price, status').eq('business_id', profile.business_id!).eq('status', 'active'),
+      supabase.from('categories').select('id, name').eq('business_id', profile.business_id!),
+    ]).then(([prodRes, catRes]) => {
+      setProducts((prodRes.data || []) as ProductRow[]);
+      setCategories((catRes.data || []) as CategoryRow[]);
+    });
+  }, [profile?.business_id]);
 
   const filteredProducts = products.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.barcode.includes(search) || p.sku.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || (p.barcode || '').includes(search) || (p.sku || '').toLowerCase().includes(search.toLowerCase());
     const matchesCategory = categoryFilter === "all" || p.category_id === categoryFilter;
-    return matchesSearch && matchesCategory && p.status === 'active';
+    return matchesSearch && matchesCategory;
   });
 
-  const addProduct = (product: typeof products[0]) => {
+  const addProduct = (product: ProductRow) => {
     store.addItem({ product_id: product.id, name: product.name, price: product.selling_price, quantity: 1, discount: 0, is_custom: false, notes: '' });
   };
 
