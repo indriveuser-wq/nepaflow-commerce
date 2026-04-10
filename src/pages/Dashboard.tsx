@@ -1,26 +1,55 @@
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TrendingUp, TrendingDown, ShoppingCart, Package, AlertTriangle, DollarSign } from "lucide-react";
 import { formatNPR, formatDate, getStatusColor } from "@/lib/formatters";
-import { mockInventory, salesChartData, paymentMethodData, branchPerformanceData } from "@/lib/mock-data";
-import { useProductStore } from "@/stores/product-store";
-import { useOrderStore } from "@/stores/order-store";
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar, PieChart, Pie, Cell } from "recharts";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Dashboard() {
-  const { products } = useProductStore();
-  const { orders } = useOrderStore();
+  const { profile } = useAuth();
+  const [stats, setStats] = useState({ revenue: 0, paidCount: 0, orderCount: 0, completedCount: 0, productCount: 0, activeProducts: 0, lowStockCount: 0 });
+  const [recentOrders, setRecentOrders] = useState<any[]>([]);
+  const [lowStockItems, setLowStockItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const lowStockItems = mockInventory.filter(i => i.quantity <= i.low_stock_threshold);
-  const recentOrders = orders.slice(0, 5);
-  const totalRevenue = orders.filter(o => o.payment_status === 'paid').reduce((sum, o) => sum + o.total, 0);
+  useEffect(() => {
+    if (!profile?.business_id) return;
+    const biz = profile.business_id;
 
-  const stats = [
-    { label: "Total Revenue", value: formatNPR(totalRevenue), change: `${orders.filter(o => o.payment_status === 'paid').length} paid`, up: true, icon: DollarSign },
-    { label: "Total Orders", value: String(orders.length), change: `${orders.filter(o => o.status === 'completed').length} completed`, up: true, icon: ShoppingCart },
-    { label: "Products", value: String(products.length), change: `${products.filter(p => p.status === 'active').length} active`, up: true, icon: Package },
-    { label: "Low Stock Items", value: String(lowStockItems.length), change: "Needs attention", up: false, icon: AlertTriangle },
+    Promise.all([
+      supabase.from('orders').select('id, order_number, customer_name, status, payment_status, total, created_at').eq('business_id', biz).order('created_at', { ascending: false }).limit(5),
+      supabase.from('orders').select('total, payment_status, status').eq('business_id', biz),
+      supabase.from('products').select('id, status').eq('business_id', biz),
+      supabase.from('inventory_items').select('id, quantity, low_stock_threshold, product_id, branch_id, products(name, sku), branches(name)').lte('quantity', 10),
+    ]).then(([recentRes, allOrdersRes, prodRes, invRes]) => {
+      const allOrders = allOrdersRes.data || [];
+      const prods = prodRes.data || [];
+      const revenue = allOrders.filter(o => o.payment_status === 'paid').reduce((s, o) => s + Number(o.total), 0);
+
+      setStats({
+        revenue,
+        paidCount: allOrders.filter(o => o.payment_status === 'paid').length,
+        orderCount: allOrders.length,
+        completedCount: allOrders.filter(o => o.status === 'completed').length,
+        productCount: prods.length,
+        activeProducts: prods.filter(p => p.status === 'active').length,
+        lowStockCount: (invRes.data || []).filter((i: any) => i.quantity <= i.low_stock_threshold).length,
+      });
+      setRecentOrders(recentRes.data || []);
+      setLowStockItems((invRes.data || []).filter((i: any) => i.quantity <= i.low_stock_threshold).slice(0, 5));
+      setLoading(false);
+    });
+  }, [profile?.business_id]);
+
+  if (loading) return <div className="flex items-center justify-center py-16"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+
+  const statCards = [
+    { label: "Total Revenue", value: formatNPR(stats.revenue), change: `${stats.paidCount} paid`, up: true, icon: DollarSign },
+    { label: "Total Orders", value: String(stats.orderCount), change: `${stats.completedCount} completed`, up: true, icon: ShoppingCart },
+    { label: "Products", value: String(stats.productCount), change: `${stats.activeProducts} active`, up: true, icon: Package },
+    { label: "Low Stock Items", value: String(stats.lowStockCount), change: "Needs attention", up: false, icon: AlertTriangle },
   ];
 
   return (
@@ -31,7 +60,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((s) => (
+        {statCards.map(s => (
           <Card key={s.label}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">{s.label}</CardTitle>
@@ -40,79 +69,21 @@ export default function Dashboard() {
             <CardContent>
               <div className="text-2xl font-bold font-display">{s.value}</div>
               <p className={`text-xs mt-1 flex items-center gap-1 ${s.up ? 'text-success' : 'text-warning'}`}>
-                {s.up ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                {s.change}
+                {s.up ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}{s.change}
               </p>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-7">
-        <Card className="lg:col-span-4">
-          <CardHeader>
-            <CardTitle className="font-display">Revenue Trend</CardTitle>
-            <CardDescription>Monthly revenue in NPR</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={salesChartData}>
-                  <defs>
-                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--chart-1))" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="hsl(var(--chart-1))" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                  <XAxis dataKey="month" className="text-xs fill-muted-foreground" />
-                  <YAxis className="text-xs fill-muted-foreground" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip formatter={(v: number) => [formatNPR(v), 'Revenue']} />
-                  <Area type="monotone" dataKey="revenue" stroke="hsl(var(--chart-1))" fillOpacity={1} fill="url(#colorRevenue)" strokeWidth={2} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-3">
-          <CardHeader>
-            <CardTitle className="font-display">Payment Methods</CardTitle>
-            <CardDescription>Distribution by method</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={paymentMethodData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={4} dataKey="value" label={({ name, value }) => `${name} ${value}%`}>
-                    {paymentMethodData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-7">
-        <Card className="lg:col-span-4">
-          <CardHeader>
-            <CardTitle className="font-display">Recent Orders</CardTitle>
-            <CardDescription>Latest transactions</CardDescription>
-          </CardHeader>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader><CardTitle className="font-display">Recent Orders</CardTitle><CardDescription>Latest transactions</CardDescription></CardHeader>
           <CardContent>
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Order</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                </TableRow>
-              </TableHeader>
+              <TableHeader><TableRow><TableHead>Order</TableHead><TableHead>Customer</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader>
               <TableBody>
-                {recentOrders.map((o) => (
+                {recentOrders.map(o => (
                   <TableRow key={o.id}>
                     <TableCell className="font-medium">{o.order_number}</TableCell>
                     <TableCell>{o.customer_name}</TableCell>
@@ -120,65 +91,32 @@ export default function Dashboard() {
                     <TableCell className="text-right">{formatNPR(o.total)}</TableCell>
                   </TableRow>
                 ))}
+                {recentOrders.length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">No orders yet</TableCell></TableRow>}
               </TableBody>
             </Table>
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-3">
-          <CardHeader>
-            <CardTitle className="font-display">Branch Performance</CardTitle>
-            <CardDescription>Revenue by branch</CardDescription>
-          </CardHeader>
+        <Card>
+          <CardHeader><CardTitle className="font-display">Low Stock Alerts</CardTitle><CardDescription>Products that need restocking</CardDescription></CardHeader>
           <CardContent>
-            <div className="h-[250px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={branchPerformanceData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                  <XAxis type="number" className="text-xs fill-muted-foreground" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                  <YAxis type="category" dataKey="branch" className="text-xs fill-muted-foreground" width={120} />
-                  <Tooltip formatter={(v: number) => [formatNPR(v), 'Revenue']} />
-                  <Bar dataKey="revenue" fill="hsl(var(--chart-1))" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            <Table>
+              <TableHeader><TableRow><TableHead>Product</TableHead><TableHead>Branch</TableHead><TableHead className="text-right">Stock</TableHead><TableHead className="text-right">Threshold</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {lowStockItems.map((item: any) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="font-medium">{item.products?.name || 'Unknown'}</TableCell>
+                    <TableCell>{item.branches?.name || 'Unknown'}</TableCell>
+                    <TableCell className="text-right text-destructive font-medium">{item.quantity}</TableCell>
+                    <TableCell className="text-right">{item.low_stock_threshold}</TableCell>
+                  </TableRow>
+                ))}
+                {lowStockItems.length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">All stock levels are healthy</TableCell></TableRow>}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-display">Low Stock Alerts</CardTitle>
-          <CardDescription>Products that need restocking</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Product</TableHead>
-                <TableHead>SKU</TableHead>
-                <TableHead>Branch</TableHead>
-                <TableHead className="text-right">Current Stock</TableHead>
-                <TableHead className="text-right">Threshold</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {lowStockItems.slice(0, 5).map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell className="font-medium">{item.product_name}</TableCell>
-                  <TableCell>{item.sku}</TableCell>
-                  <TableCell>{item.branch_name}</TableCell>
-                  <TableCell className="text-right text-destructive font-medium">{item.quantity}</TableCell>
-                  <TableCell className="text-right">{item.low_stock_threshold}</TableCell>
-                </TableRow>
-              ))}
-              {lowStockItems.length === 0 && (
-                <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">All stock levels are healthy</TableCell></TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
     </div>
   );
 }
