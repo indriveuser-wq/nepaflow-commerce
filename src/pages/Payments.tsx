@@ -1,33 +1,46 @@
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, CreditCard } from "lucide-react";
+import { Search } from "lucide-react";
 import { formatNPR, formatDate, getStatusColor } from "@/lib/formatters";
-import { mockPayments } from "@/lib/mock-data";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Payments() {
+  const { profile } = useAuth();
   const [search, setSearch] = useState("");
   const [methodFilter, setMethodFilter] = useState("all");
+  const [orders, setOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = mockPayments.filter(p => {
-    const matchesSearch = p.order_number.toLowerCase().includes(search.toLowerCase()) || p.customer_name.toLowerCase().includes(search.toLowerCase());
-    const matchesMethod = methodFilter === "all" || p.method === methodFilter;
+  useEffect(() => {
+    if (!profile?.business_id) return;
+    supabase.from('orders')
+      .select('id, order_number, customer_name, total, payment_status, payment_method, created_at')
+      .eq('business_id', profile.business_id)
+      .eq('payment_status', 'paid')
+      .order('created_at', { ascending: false })
+      .then(({ data }) => { setOrders(data || []); setLoading(false); });
+  }, [profile?.business_id]);
+
+  const filtered = orders.filter(o => {
+    const matchesSearch = o.order_number.toLowerCase().includes(search.toLowerCase()) || o.customer_name.toLowerCase().includes(search.toLowerCase());
+    const matchesMethod = methodFilter === "all" || o.payment_method === methodFilter;
     return matchesSearch && matchesMethod;
   });
 
-  const totalRevenue = mockPayments.reduce((sum, p) => sum + p.amount, 0);
+  const totalRevenue = orders.reduce((sum, o) => sum + Number(o.total), 0);
+
+  if (loading) return <div className="flex items-center justify-center py-16"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-display font-bold tracking-tight">Payments</h1>
-          <p className="text-muted-foreground text-sm">Total: {formatNPR(totalRevenue)} from {mockPayments.length} transactions</p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-display font-bold tracking-tight">Payments</h1>
+        <p className="text-muted-foreground text-sm">Total: {formatNPR(totalRevenue)} from {orders.length} transactions</p>
       </div>
 
       <Card>
@@ -52,25 +65,21 @@ export default function Payments() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Order</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Method</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Reference</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
+                <TableHead>Order</TableHead><TableHead>Customer</TableHead><TableHead>Method</TableHead>
+                <TableHead>Date</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Amount</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map(p => (
-                <TableRow key={p.id}>
-                  <TableCell className="font-medium">{p.order_number}</TableCell>
-                  <TableCell>{p.customer_name}</TableCell>
-                  <TableCell><Badge variant="outline">{p.method}</Badge></TableCell>
-                  <TableCell className="text-muted-foreground">{formatDate(p.paid_at)}</TableCell>
-                  <TableCell className="text-muted-foreground">{p.reference || '—'}</TableCell>
-                  <TableCell><Badge variant="outline" className={getStatusColor(p.status === 'completed' ? 'paid' : p.status)}>{p.status}</Badge></TableCell>
-                  <TableCell className="text-right font-medium">{formatNPR(p.amount)}</TableCell>
+              {filtered.length === 0 ? (
+                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No payments found</TableCell></TableRow>
+              ) : filtered.map(o => (
+                <TableRow key={o.id}>
+                  <TableCell className="font-medium">{o.order_number}</TableCell>
+                  <TableCell>{o.customer_name}</TableCell>
+                  <TableCell><Badge variant="outline">{o.payment_method}</Badge></TableCell>
+                  <TableCell className="text-muted-foreground">{formatDate(o.created_at)}</TableCell>
+                  <TableCell><Badge variant="outline" className={getStatusColor('paid')}>paid</Badge></TableCell>
+                  <TableCell className="text-right font-medium">{formatNPR(o.total)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
