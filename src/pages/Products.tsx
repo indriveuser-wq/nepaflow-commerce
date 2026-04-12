@@ -136,11 +136,11 @@ export default function Products() {
   if (loading) return <div className="flex items-center justify-center py-16"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+    <div className="space-y-4 md:space-y-6">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-display font-bold tracking-tight">Products</h1>
-          <p className="text-muted-foreground text-sm">{products.length} products in catalog</p>
+          <h1 className="text-xl md:text-2xl font-display font-bold tracking-tight">Products</h1>
+          <p className="text-muted-foreground text-xs md:text-sm">{products.length} products</p>
         </div>
       </div>
 
@@ -150,54 +150,55 @@ export default function Products() {
           <TabsTrigger value="categories">Categories</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="products" className="space-y-4 mt-4">
-          {canManage && (
-            <div className="flex justify-end">
-              <Button onClick={openAddForm}><Plus className="h-4 w-4 mr-2" />Add Product</Button>
-            </div>
-          )}
-
-          <div className="flex flex-col sm:flex-row gap-3">
+        <TabsContent value="products" className="space-y-3 md:space-y-4 mt-3 md:mt-4">
+          <div className="flex flex-col sm:flex-row gap-2 md:gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search products..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+              <Input placeholder="Search products..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9 md:h-10" />
             </div>
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-full sm:w-[180px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <div className="flex gap-2">
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger className="w-full sm:w-[140px] md:w-[180px] h-9 md:h-10"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {canManage && (
+                <Button size="sm" className="md:size-default shrink-0" onClick={openAddForm}>
+                  <Plus className="h-4 w-4 md:mr-2" /><span className="hidden md:inline">Add Product</span>
+                </Button>
+              )}
+            </div>
           </div>
 
           {filtered.length === 0 ? (
-            <div className="text-center py-16 text-muted-foreground">
-              <Package className="h-10 w-10 mx-auto mb-3 opacity-50" /><p>No products found</p>
+            <div className="text-center py-12 text-muted-foreground">
+              <Package className="h-10 w-10 mx-auto mb-3 opacity-50" /><p className="text-sm">No products found</p>
             </div>
           ) : (
             sortedCategories.map(catName => (
-              <div key={catName} className="space-y-3">
+              <div key={catName} className="space-y-2 md:space-y-3">
                 <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-display font-semibold">{catName}</h2>
-                  <Badge variant="secondary" className="text-xs">{grouped[catName].length}</Badge>
+                  <h2 className="text-sm md:text-lg font-display font-semibold">{catName}</h2>
+                  <Badge variant="secondary" className="text-[10px] md:text-xs">{grouped[catName].length}</Badge>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 md:gap-4">
                   {grouped[catName].map(p => (
                     <Card key={p.id} className="group hover:shadow-md transition-all">
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="h-12 w-12 rounded-xl bg-accent flex items-center justify-center"><Package className="h-6 w-6 text-accent-foreground" /></div>
-                          <Badge variant="outline" className={getStatusColor(p.status)}>{p.status}</Badge>
+                      <CardContent className="p-2.5 md:p-4">
+                        <div className="flex items-start justify-between mb-2 md:mb-3">
+                          <div className="h-8 w-8 md:h-12 md:w-12 rounded-lg md:rounded-xl bg-accent flex items-center justify-center"><Package className="h-4 w-4 md:h-6 md:w-6 text-accent-foreground" /></div>
+                          <Badge variant="outline" className={`${getStatusColor(p.status)} text-[10px] md:text-xs`}>{p.status}</Badge>
                         </div>
-                        <h3 className="font-semibold text-sm leading-tight mb-1 line-clamp-2">{p.name}</h3>
-                        <p className="text-xs text-muted-foreground mb-3">{p.sku} · {p.barcode}</p>
+                        <h3 className="font-semibold text-xs md:text-sm leading-tight mb-0.5 md:mb-1 line-clamp-2">{p.name}</h3>
+                        <p className="text-[10px] md:text-xs text-muted-foreground mb-2 md:mb-3 truncate">{p.sku}</p>
                         <div className="flex items-end justify-between">
-                          <p className="text-base font-bold font-display">{formatNPR(p.selling_price)}</p>
+                          <p className="text-sm md:text-base font-bold font-display">{formatNPR(p.selling_price)}</p>
                           {canManage && (
-                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={e => { e.stopPropagation(); openEditForm(p); }}><Edit className="h-3.5 w-3.5" /></Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={e => { e.stopPropagation(); setDeleteConfirm(p.id); }}><Trash2 className="h-3.5 w-3.5" /></Button>
+                            <div className="flex gap-0.5 md:gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                              <Button variant="ghost" size="icon" className="h-7 w-7 md:h-8 md:w-8" onClick={e => { e.stopPropagation(); openEditForm(p); }}><Edit className="h-3 w-3 md:h-3.5 md:w-3.5" /></Button>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 md:h-8 md:w-8 text-destructive" onClick={e => { e.stopPropagation(); setDeleteConfirm(p.id); }}><Trash2 className="h-3 w-3 md:h-3.5 md:w-3.5" /></Button>
                             </div>
                           )}
                         </div>
