@@ -103,8 +103,10 @@ export default function NewOrder() {
 
     setSubmitting(true);
     try {
+      const { data: bizData } = await supabase.from('businesses').select('name').eq('id', profile.business_id).single();
+      const bizPrefix = (bizData?.name || 'ORD').split(' ').map(w => w[0]?.toUpperCase()).join('').slice(0, 3);
       const { count } = await supabase.from('orders').select('*', { count: 'exact', head: true }).eq('business_id', profile.business_id);
-      const orderNumber = `BN-${String((count || 0) + 1).padStart(3, '0')}`;
+      const orderNumber = `${bizPrefix}-${String((count || 0) + 1).padStart(3, '0')}`;
 
       const { data: order, error: orderError } = await supabase.from('orders').insert({
         order_number: orderNumber,

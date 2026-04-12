@@ -11,6 +11,8 @@ import {
 import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 type NavItem = { title: string; url: string; icon: React.ComponentType<{ className?: string }>; roles?: string[] };
 
@@ -69,13 +71,23 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const { profile, signOut } = useAuth();
+  const [businessName, setBusinessName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!profile?.business_id) return;
+    supabase.from('businesses').select('name').eq('id', profile.business_id).single()
+      .then(({ data }) => { if (data) setBusinessName(data.name); });
+  }, [profile?.business_id]);
+
+  const displayName = businessName || 'My Store';
+  const initial = displayName.charAt(0).toUpperCase();
 
   return (
     <Sidebar collapsible="icon" className="border-r-0 overflow-hidden">
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-display font-bold text-sm">B</div>
-          {!collapsed && <span className="font-display font-bold text-lg tracking-tight">BizNep</span>}
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-display font-bold text-sm">{initial}</div>
+          {!collapsed && <span className="font-display font-bold text-lg tracking-tight">{displayName}</span>}
         </div>
       </SidebarHeader>
       <SidebarContent className="overflow-y-auto scrollbar-none">
