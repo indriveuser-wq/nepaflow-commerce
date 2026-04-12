@@ -34,7 +34,7 @@ export default function Login() {
             <div className="h-12 w-12 rounded-xl bg-primary flex items-center justify-center text-primary-foreground font-display font-bold text-lg">B</div>
           </div>
           <CardTitle className="font-display text-2xl">Welcome back</CardTitle>
-          <CardDescription>Sign in to your BizNep account</CardDescription>
+          <CardDescription>Sign in to your account</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">

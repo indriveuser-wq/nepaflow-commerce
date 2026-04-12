@@ -59,7 +59,7 @@ export default function SetupBusiness() {
     }
 
     setLoading(false);
-    toast.success("Business created! Welcome to BizNep.");
+    toast.success("Business created! Welcome.");
     navigate('/dashboard');
   };
 
