@@ -11,6 +11,8 @@ import {
 import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 type NavItem = { title: string; url: string; icon: React.ComponentType<{ className?: string }>; roles?: string[] };
 
