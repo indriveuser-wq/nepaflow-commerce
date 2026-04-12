@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TrendingUp, TrendingDown, ShoppingCart, Package, AlertTriangle, DollarSign } from "lucide-react";
 import { formatNPR, formatDate, getStatusColor } from "@/lib/formatters";
 import { supabase } from "@/integrations/supabase/client";
@@ -49,26 +48,26 @@ export default function Dashboard() {
     { label: "Total Revenue", value: formatNPR(stats.revenue), change: `${stats.paidCount} paid`, up: true, icon: DollarSign },
     { label: "Total Orders", value: String(stats.orderCount), change: `${stats.completedCount} completed`, up: true, icon: ShoppingCart },
     { label: "Products", value: String(stats.productCount), change: `${stats.activeProducts} active`, up: true, icon: Package },
-    { label: "Low Stock Items", value: String(stats.lowStockCount), change: "Needs attention", up: false, icon: AlertTriangle },
+    { label: "Low Stock", value: String(stats.lowStockCount), change: "Needs attention", up: false, icon: AlertTriangle },
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       <div>
-        <h1 className="text-2xl font-display font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground text-sm">Overview of your business performance</p>
+        <h1 className="text-xl md:text-2xl font-display font-bold tracking-tight">Dashboard</h1>
+        <p className="text-muted-foreground text-xs md:text-sm">Overview of your business performance</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 md:gap-4 md:grid-cols-2 lg:grid-cols-4">
         {statCards.map(s => (
           <Card key={s.label}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">{s.label}</CardTitle>
-              <s.icon className="h-4 w-4 text-muted-foreground" />
+            <CardHeader className="flex flex-row items-center justify-between pb-1 md:pb-2 p-3 md:p-6">
+              <CardTitle className="text-[11px] md:text-sm font-medium text-muted-foreground">{s.label}</CardTitle>
+              <s.icon className="h-3.5 w-3.5 md:h-4 md:w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold font-display">{s.value}</div>
-              <p className={`text-xs mt-1 flex items-center gap-1 ${s.up ? 'text-success' : 'text-warning'}`}>
+            <CardContent className="p-3 pt-0 md:p-6 md:pt-0">
+              <div className="text-lg md:text-2xl font-bold font-display">{s.value}</div>
+              <p className={`text-[10px] md:text-xs mt-0.5 md:mt-1 flex items-center gap-1 ${s.up ? 'text-success' : 'text-warning'}`}>
                 {s.up ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}{s.change}
               </p>
             </CardContent>
@@ -78,42 +77,86 @@ export default function Dashboard() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <CardHeader><CardTitle className="font-display">Recent Orders</CardTitle><CardDescription>Latest transactions</CardDescription></CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader><TableRow><TableHead>Order</TableHead><TableHead>Customer</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {recentOrders.map(o => (
-                  <TableRow key={o.id}>
-                    <TableCell className="font-medium">{o.order_number}</TableCell>
-                    <TableCell>{o.customer_name}</TableCell>
-                    <TableCell><Badge variant="outline" className={getStatusColor(o.status)}>{o.status}</Badge></TableCell>
-                    <TableCell className="text-right">{formatNPR(o.total)}</TableCell>
-                  </TableRow>
-                ))}
-                {recentOrders.length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">No orders yet</TableCell></TableRow>}
-              </TableBody>
-            </Table>
+          <CardHeader className="p-3 md:p-6 pb-2 md:pb-4">
+            <CardTitle className="font-display text-sm md:text-base">Recent Orders</CardTitle>
+            <CardDescription className="text-xs">Latest transactions</CardDescription>
+          </CardHeader>
+          <CardContent className="p-0 md:p-6 md:pt-0">
+            {/* Mobile: card list */}
+            <div className="md:hidden divide-y">
+              {recentOrders.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8 text-sm">No orders yet</p>
+              ) : recentOrders.map(o => (
+                <div key={o.id} className="flex items-center justify-between px-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium truncate">{o.order_number}</p>
+                    <p className="text-[10px] text-muted-foreground truncate">{o.customer_name}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Badge variant="outline" className={`${getStatusColor(o.status)} text-[10px] px-1.5 py-0`}>{o.status}</Badge>
+                    <span className="text-xs font-medium">{formatNPR(o.total)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Desktop: table */}
+            <div className="hidden md:block">
+              <table className="w-full">
+                <thead><tr className="border-b text-left text-sm text-muted-foreground"><th className="pb-2 font-medium">Order</th><th className="pb-2 font-medium">Customer</th><th className="pb-2 font-medium">Status</th><th className="pb-2 font-medium text-right">Total</th></tr></thead>
+                <tbody>
+                  {recentOrders.map(o => (
+                    <tr key={o.id} className="border-b last:border-0">
+                      <td className="py-2.5 text-sm font-medium">{o.order_number}</td>
+                      <td className="py-2.5 text-sm">{o.customer_name}</td>
+                      <td className="py-2.5"><Badge variant="outline" className={getStatusColor(o.status)}>{o.status}</Badge></td>
+                      <td className="py-2.5 text-sm text-right">{formatNPR(o.total)}</td>
+                    </tr>
+                  ))}
+                  {recentOrders.length === 0 && <tr><td colSpan={4} className="text-center text-muted-foreground py-8">No orders yet</td></tr>}
+                </tbody>
+              </table>
+            </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader><CardTitle className="font-display">Low Stock Alerts</CardTitle><CardDescription>Products that need restocking</CardDescription></CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader><TableRow><TableHead>Product</TableHead><TableHead>Branch</TableHead><TableHead className="text-right">Stock</TableHead><TableHead className="text-right">Threshold</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {lowStockItems.map((item: any) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-medium">{item.products?.name || 'Unknown'}</TableCell>
-                    <TableCell>{item.branches?.name || 'Unknown'}</TableCell>
-                    <TableCell className="text-right text-destructive font-medium">{item.quantity}</TableCell>
-                    <TableCell className="text-right">{item.low_stock_threshold}</TableCell>
-                  </TableRow>
-                ))}
-                {lowStockItems.length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">All stock levels are healthy</TableCell></TableRow>}
-              </TableBody>
-            </Table>
+          <CardHeader className="p-3 md:p-6 pb-2 md:pb-4">
+            <CardTitle className="font-display text-sm md:text-base">Low Stock Alerts</CardTitle>
+            <CardDescription className="text-xs">Products that need restocking</CardDescription>
+          </CardHeader>
+          <CardContent className="p-0 md:p-6 md:pt-0">
+            <div className="md:hidden divide-y">
+              {lowStockItems.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8 text-sm">All stock levels are healthy</p>
+              ) : lowStockItems.map((item: any) => (
+                <div key={item.id} className="flex items-center justify-between px-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium truncate">{item.products?.name || 'Unknown'}</p>
+                    <p className="text-[10px] text-muted-foreground">{item.branches?.name || 'Unknown'}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="text-xs font-medium text-destructive">{item.quantity}</span>
+                    <span className="text-[10px] text-muted-foreground"> / {item.low_stock_threshold}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="hidden md:block">
+              <table className="w-full">
+                <thead><tr className="border-b text-left text-sm text-muted-foreground"><th className="pb-2 font-medium">Product</th><th className="pb-2 font-medium">Branch</th><th className="pb-2 font-medium text-right">Stock</th><th className="pb-2 font-medium text-right">Threshold</th></tr></thead>
+                <tbody>
+                  {lowStockItems.map((item: any) => (
+                    <tr key={item.id} className="border-b last:border-0">
+                      <td className="py-2.5 text-sm font-medium">{item.products?.name || 'Unknown'}</td>
+                      <td className="py-2.5 text-sm">{item.branches?.name || 'Unknown'}</td>
+                      <td className="py-2.5 text-sm text-right text-destructive font-medium">{item.quantity}</td>
+                      <td className="py-2.5 text-sm text-right">{item.low_stock_threshold}</td>
+                    </tr>
+                  ))}
+                  {lowStockItems.length === 0 && <tr><td colSpan={4} className="text-center text-muted-foreground py-8">All stock levels are healthy</td></tr>}
+                </tbody>
+              </table>
+            </div>
           </CardContent>
         </Card>
       </div>

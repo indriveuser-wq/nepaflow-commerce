@@ -52,7 +52,7 @@ const App = () => (
             <Route path="/products" element={<P><Products /></P>} />
             <Route path="/inventory" element={<P><Inventory /></P>} />
             <Route path="/orders" element={<P><Orders /></P>} />
-            <Route path="/orders/new" element={<P roles={['admin', 'manager']}><NewOrder /></P>} />
+            <Route path="/orders/new" element={<P roles={['admin', 'manager', 'cashier']}><NewOrder /></P>} />
             <Route path="/orders/:id" element={<P><OrderDetail /></P>} />
             <Route path="/pos" element={<P><POS /></P>} />
             <Route path="/customers" element={<P><Customers /></P>} />
