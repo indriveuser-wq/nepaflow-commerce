@@ -151,83 +151,127 @@ export default function NewOrder() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6 pb-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate('/orders')}><ArrowLeft className="h-4 w-4" /></Button>
         <div>
-          <h1 className="text-2xl font-display font-bold tracking-tight">New Order</h1>
-          <p className="text-muted-foreground text-sm">Create a manual order with line items</p>
+          <h1 className="text-xl md:text-2xl font-display font-bold tracking-tight">New Order</h1>
+          <p className="text-muted-foreground text-xs md:text-sm">Create a manual order</p>
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
+      <div className="grid lg:grid-cols-3 gap-4 md:gap-6">
+        {/* Line Items */}
         <div className="lg:col-span-2 space-y-4">
           <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="font-display text-lg">Line Items</CardTitle>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={addCustomLine}><Plus className="h-3 w-3 mr-1" />Custom Item</Button>
-                  <Button size="sm" onClick={() => setShowProductPicker(true)}><Plus className="h-3 w-3 mr-1" />From Catalog</Button>
+            <CardHeader className="pb-3 px-3 md:px-6">
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="font-display text-base md:text-lg">Line Items</CardTitle>
+                <div className="flex gap-1.5 md:gap-2">
+                  <Button size="sm" variant="outline" onClick={addCustomLine} className="text-xs h-8 px-2 md:px-3"><Plus className="h-3 w-3 mr-1" /><span className="hidden sm:inline">Custom</span><span className="sm:hidden">Add</span></Button>
+                  <Button size="sm" onClick={() => setShowProductPicker(true)} className="text-xs h-8 px-2 md:px-3"><Plus className="h-3 w-3 mr-1" />Catalog</Button>
                 </div>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-3 md:px-6">
               {items.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <p className="text-sm">No items added yet. Add products from catalog or create custom line items.</p>
+                <div className="text-center py-8 md:py-12 text-muted-foreground">
+                  <p className="text-sm">No items added yet.</p>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[35%]">Item</TableHead>
-                      <TableHead className="w-[15%]">Price</TableHead>
-                      <TableHead className="w-[12%]">Qty</TableHead>
-                      <TableHead className="w-[15%]">Discount</TableHead>
-                      <TableHead className="text-right w-[15%]">Total</TableHead>
-                      <TableHead className="w-[8%]"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                <>
+                  {/* Desktop table */}
+                  <div className="hidden md:block">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[35%]">Item</TableHead>
+                          <TableHead className="w-[15%]">Price</TableHead>
+                          <TableHead className="w-[12%]">Qty</TableHead>
+                          <TableHead className="w-[15%]">Discount</TableHead>
+                          <TableHead className="text-right w-[15%]">Total</TableHead>
+                          <TableHead className="w-[8%]"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {items.map(item => (
+                          <TableRow key={item.id}>
+                            <TableCell>
+                              {item.product_id ? (
+                                <div>
+                                  <p className="font-medium text-sm">{item.name}</p>
+                                  <Badge variant="outline" className="text-[10px]">Catalog</Badge>
+                                </div>
+                              ) : (
+                                <Input value={item.name} onChange={e => updateLine(item.id, 'name', e.target.value)} placeholder="Item name" className="h-8 text-sm" />
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Input type="number" value={item.unit_price || ''} onChange={e => updateLine(item.id, 'unit_price', Number(e.target.value))} className="h-8 text-sm w-24" disabled={!!item.product_id} />
+                            </TableCell>
+                            <TableCell>
+                              <Input type="number" value={item.quantity} onChange={e => updateLine(item.id, 'quantity', Math.max(1, Number(e.target.value)))} className="h-8 text-sm w-16" min={1} />
+                            </TableCell>
+                            <TableCell>
+                              <Input type="number" value={item.discount || ''} onChange={e => updateLine(item.id, 'discount', Number(e.target.value))} className="h-8 text-sm w-20" placeholder="0" />
+                            </TableCell>
+                            <TableCell className="text-right font-medium text-sm">
+                              {formatNPR(item.unit_price * item.quantity - item.discount)}
+                            </TableCell>
+                            <TableCell>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeLine(item.id)}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Mobile card list */}
+                  <div className="md:hidden divide-y">
                     {items.map(item => (
-                      <TableRow key={item.id}>
-                        <TableCell>
-                          {item.product_id ? (
-                            <div>
-                              <p className="font-medium text-sm">{item.name}</p>
-                              <Badge variant="outline" className="text-[10px]">Catalog</Badge>
-                            </div>
-                          ) : (
-                            <Input value={item.name} onChange={e => updateLine(item.id, 'name', e.target.value)} placeholder="Item name" className="h-8 text-sm" />
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Input type="number" value={item.unit_price || ''} onChange={e => updateLine(item.id, 'unit_price', Number(e.target.value))} className="h-8 text-sm w-24" disabled={!!item.product_id} />
-                        </TableCell>
-                        <TableCell>
-                          <Input type="number" value={item.quantity} onChange={e => updateLine(item.id, 'quantity', Math.max(1, Number(e.target.value)))} className="h-8 text-sm w-16" min={1} />
-                        </TableCell>
-                        <TableCell>
-                          <Input type="number" value={item.discount || ''} onChange={e => updateLine(item.id, 'discount', Number(e.target.value))} className="h-8 text-sm w-20" placeholder="0" />
-                        </TableCell>
-                        <TableCell className="text-right font-medium text-sm">
-                          {formatNPR(item.unit_price * item.quantity - item.discount)}
-                        </TableCell>
-                        <TableCell>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeLine(item.id)}>
+                      <div key={item.id} className="py-3 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            {item.product_id ? (
+                              <div className="flex items-center gap-1.5">
+                                <p className="font-medium text-sm truncate">{item.name}</p>
+                                <Badge variant="outline" className="text-[10px] shrink-0">Catalog</Badge>
+                              </div>
+                            ) : (
+                              <Input value={item.name} onChange={e => updateLine(item.id, 'name', e.target.value)} placeholder="Item name" className="h-8 text-sm" />
+                            )}
+                          </div>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive shrink-0" onClick={() => removeLine(item.id)}>
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
-                        </TableCell>
-                      </TableRow>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div>
+                            <Label className="text-[10px] text-muted-foreground">Price</Label>
+                            <Input type="number" value={item.unit_price || ''} onChange={e => updateLine(item.id, 'unit_price', Number(e.target.value))} className="h-8 text-sm" disabled={!!item.product_id} />
+                          </div>
+                          <div>
+                            <Label className="text-[10px] text-muted-foreground">Qty</Label>
+                            <Input type="number" value={item.quantity} onChange={e => updateLine(item.id, 'quantity', Math.max(1, Number(e.target.value)))} className="h-8 text-sm" min={1} />
+                          </div>
+                          <div>
+                            <Label className="text-[10px] text-muted-foreground">Disc.</Label>
+                            <Input type="number" value={item.discount || ''} onChange={e => updateLine(item.id, 'discount', Number(e.target.value))} className="h-8 text-sm" placeholder="0" />
+                          </div>
+                        </div>
+                        <p className="text-right text-sm font-semibold">{formatNPR(item.unit_price * item.quantity - item.discount)}</p>
+                      </div>
                     ))}
-                  </TableBody>
-                </Table>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="hidden md:block">
             <CardHeader className="pb-3"><CardTitle className="font-display text-lg">Notes</CardTitle></CardHeader>
             <CardContent>
               <Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Order notes (optional)..." rows={3} />
@@ -235,10 +279,11 @@ export default function NewOrder() {
           </Card>
         </div>
 
+        {/* Sidebar / mobile stacked */}
         <div className="space-y-4">
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="font-display text-lg">Customer</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
+            <CardHeader className="pb-3 px-3 md:px-6"><CardTitle className="font-display text-base md:text-lg">Customer</CardTitle></CardHeader>
+            <CardContent className="space-y-3 px-3 md:px-6">
               <Select value={customerId} onValueChange={setCustomerId}>
                 <SelectTrigger><SelectValue placeholder="Walk-in Customer" /></SelectTrigger>
                 <SelectContent>
@@ -257,17 +302,17 @@ export default function NewOrder() {
           </Card>
 
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="font-display text-lg">Details</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
+            <CardHeader className="pb-3 px-3 md:px-6"><CardTitle className="font-display text-base md:text-lg">Details</CardTitle></CardHeader>
+            <CardContent className="space-y-3 px-3 md:px-6">
               <div className="space-y-2">
-                <Label>Branch</Label>
+                <Label className="text-xs">Branch</Label>
                 <Select value={branchId} onValueChange={setBranchId}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>{branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Payment Method</Label>
+                <Label className="text-xs">Payment Method</Label>
                 <Select value={paymentMethod} onValueChange={setPaymentMethod}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -280,19 +325,27 @@ export default function NewOrder() {
             </CardContent>
           </Card>
 
+          {/* Mobile notes */}
+          <Card className="md:hidden">
+            <CardHeader className="pb-3 px-3"><CardTitle className="font-display text-base">Notes</CardTitle></CardHeader>
+            <CardContent className="px-3">
+              <Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Order notes (optional)..." rows={2} />
+            </CardContent>
+          </Card>
+
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="font-display text-lg">Summary</CardTitle></CardHeader>
-            <CardContent className="space-y-2">
+            <CardHeader className="pb-3 px-3 md:px-6"><CardTitle className="font-display text-base md:text-lg">Summary</CardTitle></CardHeader>
+            <CardContent className="space-y-2 px-3 md:px-6">
               <div className="flex justify-between text-sm"><span className="text-muted-foreground">Subtotal</span><span>{formatNPR(subtotal)}</span></div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Discount</span>
                 <Input type="number" value={orderDiscount || ''} onChange={e => setOrderDiscount(Number(e.target.value))} className="h-7 w-24 text-sm text-right" placeholder="0" />
               </div>
               <Separator />
-              <div className="flex justify-between font-bold text-lg"><span>Total</span><span>{formatNPR(total)}</span></div>
+              <div className="flex justify-between font-bold text-base md:text-lg"><span>Total</span><span>{formatNPR(total)}</span></div>
               <div className="flex gap-2 pt-2">
-                <Button variant="outline" className="flex-1" onClick={() => handleSubmit('pending')} disabled={submitting}>Save as Draft</Button>
-                <Button className="flex-1" onClick={() => handleSubmit('completed')} disabled={submitting}>Complete Order</Button>
+                <Button variant="outline" className="flex-1 text-xs md:text-sm" onClick={() => handleSubmit('pending')} disabled={submitting}>Draft</Button>
+                <Button className="flex-1 text-xs md:text-sm" onClick={() => handleSubmit('completed')} disabled={submitting}>Complete</Button>
               </div>
             </CardContent>
           </Card>
@@ -300,7 +353,7 @@ export default function NewOrder() {
       </div>
 
       <Dialog open={showProductPicker} onOpenChange={setShowProductPicker}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[85vh]">
           <DialogHeader>
             <DialogTitle className="font-display">Add Product</DialogTitle>
             <DialogDescription>Search and select a product from your catalog.</DialogDescription>
@@ -309,9 +362,9 @@ export default function NewOrder() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Search products..." value={productSearch} onChange={e => setProductSearch(e.target.value)} className="pl-9" autoFocus />
           </div>
-          <div className="max-h-72 overflow-auto space-y-1">
+          <div className="max-h-60 md:max-h-72 overflow-auto space-y-1">
             {filteredPickerProducts.map(p => (
-              <div key={p.id} className="flex items-center justify-between p-2.5 rounded-lg hover:bg-accent cursor-pointer transition-colors" onClick={() => addLineItem(p)}>
+              <div key={p.id} className="flex items-center justify-between p-2.5 rounded-lg hover:bg-accent active:bg-accent cursor-pointer transition-colors" onClick={() => addLineItem(p)}>
                 <div>
                   <p className="text-sm font-medium">{p.name}</p>
                   <p className="text-xs text-muted-foreground">{p.sku}</p>
