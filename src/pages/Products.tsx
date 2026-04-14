@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Search, Edit, Trash2, Package, FolderOpen } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Package, FolderOpen, Eye } from "lucide-react";
 import { formatNPR, getStatusColor } from "@/lib/formatters";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -105,7 +105,6 @@ export default function Products() {
     setDeleteConfirm(null); toast.success("Product deleted"); await loadData();
   };
 
-  // Category CRUD
   const openAddCat = () => { setEditingCat(null); setCatForm(emptyCategory); setShowCatForm(true); };
   const openEditCat = (c: Category) => { setEditingCat(c); setCatForm({ name: c.name, description: c.description || '' }); setShowCatForm(true); };
 
@@ -133,72 +132,113 @@ export default function Products() {
 
   const updateField = (field: string, value: string) => setForm(prev => ({ ...prev, [field]: value }));
 
-  if (loading) return <div className="flex items-center justify-center py-16"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+  if (loading) return (
+    <div className="flex items-center justify-center py-16">
+      <div className="relative h-10 w-10">
+        <div className="absolute inset-0 rounded-full border-2 border-primary/20" />
+        <div className="absolute inset-0 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+      </div>
+    </div>
+  );
 
   return (
-    <div className="space-y-4 md:space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-5 md:space-y-6">
+      <div className="flex items-center justify-between animate-fade-in">
         <div>
-          <h1 className="text-xl md:text-2xl font-display font-bold tracking-tight">Products</h1>
-          <p className="text-muted-foreground text-xs md:text-sm">{products.length} products</p>
+          <h1 className="text-2xl md:text-3xl font-display font-bold">Products</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">{products.length} products across {categories.length} categories</p>
         </div>
       </div>
 
       <Tabs defaultValue="products">
-        <TabsList>
-          <TabsTrigger value="products">Products</TabsTrigger>
-          <TabsTrigger value="categories">Categories</TabsTrigger>
+        <TabsList className="bg-muted/60 p-1">
+          <TabsTrigger value="products" className="data-[state=active]:bg-card data-[state=active]:shadow-sm text-sm font-medium">Products</TabsTrigger>
+          <TabsTrigger value="categories" className="data-[state=active]:bg-card data-[state=active]:shadow-sm text-sm font-medium">Categories</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="products" className="space-y-3 md:space-y-4 mt-3 md:mt-4">
-          <div className="flex flex-col sm:flex-row gap-2 md:gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search products..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9 md:h-10" />
+        <TabsContent value="products" className="space-y-4 md:space-y-5 mt-4">
+          {/* Search/Filter Bar */}
+          <Card className="p-3 md:p-4">
+            <div className="flex flex-col sm:flex-row gap-2.5 md:gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by name or SKU..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="pl-9 h-10 bg-muted/40 border-0 focus-visible:ring-1 focus-visible:ring-primary/30 focus-visible:bg-card"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                  <SelectTrigger className="w-full sm:w-[160px] h-10 bg-muted/40 border-0"><SelectValue /></SelectTrigger>
+                  <SelectContent>{[<SelectItem key="all" value="all">All Categories</SelectItem>, ...categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)]}</SelectContent>
+                </Select>
+                {canManage && (
+                  <Button onClick={openAddForm} className="shrink-0 h-10 bg-gradient-to-r from-primary to-primary-glow hover:opacity-90 transition-opacity shadow-md shadow-primary/20">
+                    <Plus className="h-4 w-4 md:mr-2" /><span className="hidden md:inline">Add Product</span>
+                  </Button>
+                )}
+              </div>
             </div>
-            <div className="flex gap-2">
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-full sm:w-[140px] md:w-[180px] h-9 md:h-10"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  {categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              {canManage && (
-                <Button size="sm" className="md:size-default shrink-0" onClick={openAddForm}>
-                  <Plus className="h-4 w-4 md:mr-2" /><span className="hidden md:inline">Add Product</span>
-                </Button>
-              )}
-            </div>
-          </div>
+          </Card>
 
           {filtered.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Package className="h-10 w-10 mx-auto mb-3 opacity-50" /><p className="text-sm">No products found</p>
+            <div className="text-center py-16 animate-fade-in">
+              <div className="h-14 w-14 rounded-2xl bg-muted/60 flex items-center justify-center mx-auto mb-4">
+                <Package className="h-7 w-7 text-muted-foreground/50" />
+              </div>
+              <p className="text-sm font-medium text-muted-foreground">No products found</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">Try adjusting your search or filters</p>
             </div>
           ) : (
-            sortedCategories.map(catName => (
-              <div key={catName} className="space-y-2 md:space-y-3">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm md:text-lg font-display font-semibold">{catName}</h2>
-                  <Badge variant="secondary" className="text-[10px] md:text-xs">{grouped[catName].length}</Badge>
+            sortedCategories.map((catName, catIdx) => (
+              <div key={catName} className="space-y-3 animate-fade-in" style={{ animationDelay: `${catIdx * 100}ms`, animationFillMode: 'backwards' }}>
+                <div className="flex items-center gap-2.5">
+                  <h2 className="text-sm md:text-base font-display font-bold text-foreground/80">{catName}</h2>
+                  <Badge variant="secondary" className="text-[10px] md:text-xs font-semibold bg-primary/8 text-primary border-0">{grouped[catName].length}</Badge>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 md:gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
                   {grouped[catName].map(p => (
-                    <Card key={p.id} className="group hover:shadow-md transition-all">
-                      <CardContent className="p-2.5 md:p-4">
-                        <div className="flex items-start justify-between mb-2 md:mb-3">
-                          <div className="h-8 w-8 md:h-12 md:w-12 rounded-lg md:rounded-xl bg-accent flex items-center justify-center"><Package className="h-4 w-4 md:h-6 md:w-6 text-accent-foreground" /></div>
-                          <Badge variant="outline" className={`${getStatusColor(p.status)} text-[10px] md:text-xs`}>{p.status}</Badge>
-                        </div>
-                        <h3 className="font-semibold text-xs md:text-sm leading-tight mb-0.5 md:mb-1 line-clamp-2">{p.name}</h3>
-                        <p className="text-[10px] md:text-xs text-muted-foreground mb-2 md:mb-3 truncate">{p.sku}</p>
-                        <div className="flex items-end justify-between">
-                          <p className="text-sm md:text-base font-bold font-display">{formatNPR(p.selling_price)}</p>
+                    <Card key={p.id} className="group card-interactive overflow-hidden">
+                      {/* Image area */}
+                      <div className="aspect-square bg-gradient-to-br from-accent to-muted/50 flex items-center justify-center relative overflow-hidden">
+                        {p.image_url ? (
+                          <img src={p.image_url} alt={p.name} className="h-full w-full object-cover" />
+                        ) : (
+                          <Package className="h-8 w-8 md:h-12 md:w-12 text-muted-foreground/25" />
+                        )}
+                        {/* Hover overlay */}
+                        {canManage && (
+                          <div className="absolute inset-0 bg-foreground/60 opacity-0 group-hover:opacity-100 transition-all duration-200 flex items-center justify-center gap-2">
+                            <Button variant="secondary" size="icon" className="h-9 w-9 rounded-full shadow-lg" onClick={e => { e.stopPropagation(); openEditForm(p); }}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button variant="destructive" size="icon" className="h-9 w-9 rounded-full shadow-lg" onClick={e => { e.stopPropagation(); setDeleteConfirm(p.id); }}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
+                        {/* Status badge */}
+                        <Badge variant="outline" className={`${getStatusColor(p.status)} absolute top-2 right-2 text-[10px] md:text-xs font-semibold backdrop-blur-md bg-card/80`}>
+                          {p.status}
+                        </Badge>
+                      </div>
+                      <CardContent className="p-3 md:p-4">
+                        <h3 className="font-semibold text-xs md:text-sm leading-tight mb-0.5 line-clamp-2">{p.name}</h3>
+                        {p.sku && <p className="text-[10px] md:text-xs text-muted-foreground mb-2 truncate font-mono">{p.sku}</p>}
+                        <div className="flex items-end justify-between mt-2">
+                          <div>
+                            <p className="text-base md:text-lg font-bold font-display text-primary">{formatNPR(p.selling_price)}</p>
+                            {p.cost_price > 0 && (
+                              <p className="text-[10px] text-muted-foreground">Cost: {formatNPR(p.cost_price)}</p>
+                            )}
+                          </div>
+                          {/* Mobile edit buttons */}
                           {canManage && (
-                            <div className="flex gap-0.5 md:gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                              <Button variant="ghost" size="icon" className="h-7 w-7 md:h-8 md:w-8" onClick={e => { e.stopPropagation(); openEditForm(p); }}><Edit className="h-3 w-3 md:h-3.5 md:w-3.5" /></Button>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 md:h-8 md:w-8 text-destructive" onClick={e => { e.stopPropagation(); setDeleteConfirm(p.id); }}><Trash2 className="h-3 w-3 md:h-3.5 md:w-3.5" /></Button>
+                            <div className="flex gap-0.5 md:hidden">
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={e => { e.stopPropagation(); openEditForm(p); }}><Edit className="h-3 w-3" /></Button>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={e => { e.stopPropagation(); setDeleteConfirm(p.id); }}><Trash2 className="h-3 w-3" /></Button>
                             </div>
                           )}
                         </div>
@@ -214,35 +254,47 @@ export default function Products() {
         <TabsContent value="categories" className="space-y-4 mt-4">
           {canManage && (
             <div className="flex justify-end">
-              <Button onClick={openAddCat}><Plus className="h-4 w-4 mr-2" />Add Category</Button>
+              <Button onClick={openAddCat} className="bg-gradient-to-r from-primary to-primary-glow hover:opacity-90 transition-opacity shadow-md shadow-primary/20">
+                <Plus className="h-4 w-4 mr-2" />Add Category
+              </Button>
             </div>
           )}
           {categories.length === 0 ? (
-            <div className="text-center py-16 text-muted-foreground">
-              <FolderOpen className="h-10 w-10 mx-auto mb-3 opacity-50" /><p>No categories yet</p>
+            <div className="text-center py-16 text-muted-foreground animate-fade-in">
+              <div className="h-14 w-14 rounded-2xl bg-muted/60 flex items-center justify-center mx-auto mb-4">
+                <FolderOpen className="h-7 w-7 text-muted-foreground/50" />
+              </div>
+              <p className="font-medium">No categories yet</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">Create categories to organize your products</p>
             </div>
           ) : (
             <Card>
               <CardContent className="p-0">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead className="text-right">Products</TableHead>
-                      {canManage && <TableHead className="text-right">Actions</TableHead>}
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="text-xs uppercase tracking-wider font-semibold text-muted-foreground">Name</TableHead>
+                      <TableHead className="text-xs uppercase tracking-wider font-semibold text-muted-foreground">Description</TableHead>
+                      <TableHead className="text-right text-xs uppercase tracking-wider font-semibold text-muted-foreground">Products</TableHead>
+                      {canManage && <TableHead className="text-right text-xs uppercase tracking-wider font-semibold text-muted-foreground">Actions</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {categories.map(c => (
-                      <TableRow key={c.id}>
-                        <TableCell className="font-medium">{c.name}</TableCell>
-                        <TableCell className="text-muted-foreground">{c.description || '—'}</TableCell>
-                        <TableCell className="text-right">{products.filter(p => p.category_id === c.id).length}</TableCell>
+                      <TableRow key={c.id} className="group transition-colors">
+                        <TableCell className="font-semibold">{c.name}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">{c.description || '—'}</TableCell>
+                        <TableCell className="text-right">
+                          <Badge variant="secondary" className="bg-primary/8 text-primary border-0 font-semibold">
+                            {products.filter(p => p.category_id === c.id).length}
+                          </Badge>
+                        </TableCell>
                         {canManage && (
                           <TableCell className="text-right">
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditCat(c)}><Edit className="h-3.5 w-3.5" /></Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteCatConfirm(c.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                            <div className="flex justify-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
+                              <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10 hover:text-primary" onClick={() => openEditCat(c)}><Edit className="h-3.5 w-3.5" /></Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive" onClick={() => setDeleteCatConfirm(c.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                            </div>
                           </TableCell>
                         )}
                       </TableRow>
@@ -259,37 +311,37 @@ export default function Products() {
       <Dialog open={showForm} onOpenChange={open => { if (!open) { setShowForm(false); setEditingProduct(null); } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="font-display">{editingProduct ? 'Edit Product' : 'Add New Product'}</DialogTitle>
+            <DialogTitle className="font-display text-xl">{editingProduct ? 'Edit Product' : 'Add New Product'}</DialogTitle>
             <DialogDescription>{editingProduct ? 'Update product details below.' : 'Fill in the details to add a new product.'}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>Name *</Label><Input value={form.name} onChange={e => updateField('name', e.target.value)} placeholder="Product name" /></div>
-              <div className="space-y-2"><Label>SKU</Label><Input value={form.sku} onChange={e => updateField('sku', e.target.value)} placeholder="SKU-001" /></div>
+              <div className="space-y-2"><Label className="text-xs font-semibold uppercase tracking-wider">Name *</Label><Input value={form.name} onChange={e => updateField('name', e.target.value)} placeholder="Product name" className="bg-muted/40 border-0 focus-visible:ring-1" /></div>
+              <div className="space-y-2"><Label className="text-xs font-semibold uppercase tracking-wider">SKU</Label><Input value={form.sku} onChange={e => updateField('sku', e.target.value)} placeholder="SKU-001" className="bg-muted/40 border-0 focus-visible:ring-1 font-mono" /></div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>Cost Price (NPR)</Label><Input type="number" value={form.cost_price} onChange={e => updateField('cost_price', e.target.value)} placeholder="0" /></div>
-              <div className="space-y-2"><Label>Selling Price (NPR) *</Label><Input type="number" value={form.selling_price} onChange={e => updateField('selling_price', e.target.value)} placeholder="0" /></div>
+              <div className="space-y-2"><Label className="text-xs font-semibold uppercase tracking-wider">Cost Price (NPR)</Label><Input type="number" value={form.cost_price} onChange={e => updateField('cost_price', e.target.value)} placeholder="0" className="bg-muted/40 border-0 focus-visible:ring-1" /></div>
+              <div className="space-y-2"><Label className="text-xs font-semibold uppercase tracking-wider">Selling Price (NPR) *</Label><Input type="number" value={form.selling_price} onChange={e => updateField('selling_price', e.target.value)} placeholder="0" className="bg-muted/40 border-0 focus-visible:ring-1" /></div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Category</Label>
+                <Label className="text-xs font-semibold uppercase tracking-wider">Category</Label>
                 <Select value={form.category_id} onValueChange={v => updateField('category_id', v)}>
-                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectTrigger className="bg-muted/40 border-0"><SelectValue placeholder="Select" /></SelectTrigger>
                   <SelectContent>{categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2"><Label>Barcode</Label><Input value={form.barcode} onChange={e => updateField('barcode', e.target.value)} placeholder="Barcode" /></div>
+              <div className="space-y-2"><Label className="text-xs font-semibold uppercase tracking-wider">Barcode</Label><Input value={form.barcode} onChange={e => updateField('barcode', e.target.value)} placeholder="Barcode" className="bg-muted/40 border-0 focus-visible:ring-1 font-mono" /></div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Tax Rate (%)</Label>
-                <Input type="number" value={form.tax_rate} onChange={e => updateField('tax_rate', e.target.value)} placeholder="13" />
+                <Label className="text-xs font-semibold uppercase tracking-wider">Tax Rate (%)</Label>
+                <Input type="number" value={form.tax_rate} onChange={e => updateField('tax_rate', e.target.value)} placeholder="13" className="bg-muted/40 border-0 focus-visible:ring-1" />
               </div>
               <div className="space-y-2">
-                <Label>Status</Label>
+                <Label className="text-xs font-semibold uppercase tracking-wider">Status</Label>
                 <Select value={form.status} onValueChange={v => updateField('status', v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="bg-muted/40 border-0"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="active">Active</SelectItem>
                     <SelectItem value="inactive">Inactive</SelectItem>
@@ -297,7 +349,9 @@ export default function Products() {
                 </Select>
               </div>
             </div>
-            <Button className="w-full" onClick={handleSubmit}>{editingProduct ? 'Update Product' : 'Create Product'}</Button>
+            <Button className="w-full h-11 bg-gradient-to-r from-primary to-primary-glow hover:opacity-90 transition-opacity shadow-md shadow-primary/20 font-semibold" onClick={handleSubmit}>
+              {editingProduct ? 'Update Product' : 'Create Product'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -320,13 +374,15 @@ export default function Products() {
       <Dialog open={showCatForm} onOpenChange={open => { if (!open) { setShowCatForm(false); setEditingCat(null); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-display">{editingCat ? 'Edit Category' : 'Add Category'}</DialogTitle>
+            <DialogTitle className="font-display text-xl">{editingCat ? 'Edit Category' : 'Add Category'}</DialogTitle>
             <DialogDescription>{editingCat ? 'Update category details.' : 'Create a new product category.'}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-2"><Label>Name *</Label><Input value={catForm.name} onChange={e => setCatForm(f => ({ ...f, name: e.target.value }))} placeholder="Category name" /></div>
-            <div className="space-y-2"><Label>Description</Label><Input value={catForm.description} onChange={e => setCatForm(f => ({ ...f, description: e.target.value }))} placeholder="Optional description" /></div>
-            <Button className="w-full" onClick={handleCatSubmit}>{editingCat ? 'Update Category' : 'Create Category'}</Button>
+            <div className="space-y-2"><Label className="text-xs font-semibold uppercase tracking-wider">Name *</Label><Input value={catForm.name} onChange={e => setCatForm(f => ({ ...f, name: e.target.value }))} placeholder="Category name" className="bg-muted/40 border-0 focus-visible:ring-1" /></div>
+            <div className="space-y-2"><Label className="text-xs font-semibold uppercase tracking-wider">Description</Label><Input value={catForm.description} onChange={e => setCatForm(f => ({ ...f, description: e.target.value }))} placeholder="Optional description" className="bg-muted/40 border-0 focus-visible:ring-1" /></div>
+            <Button className="w-full h-11 bg-gradient-to-r from-primary to-primary-glow hover:opacity-90 transition-opacity shadow-md shadow-primary/20 font-semibold" onClick={handleCatSubmit}>
+              {editingCat ? 'Update Category' : 'Create Category'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
