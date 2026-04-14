@@ -1,16 +1,35 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, TrendingDown, ShoppingCart, Package, AlertTriangle, DollarSign } from "lucide-react";
+import {
+  TrendingUp, TrendingDown, ShoppingCart, Package, AlertTriangle, DollarSign,
+  ArrowUpRight, ArrowDownRight, BarChart3,
+} from "lucide-react";
 import { formatNPR, formatDate, getStatusColor } from "@/lib/formatters";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+
+function MiniSparkline({ data, color = "hsl(var(--primary))" }: { data: number[]; color?: string }) {
+  if (data.length < 2) return null;
+  const max = Math.max(...data);
+  const min = Math.min(...data);
+  const range = max - min || 1;
+  const w = 80, h = 28;
+  const points = data.map((v, i) => `${(i / (data.length - 1)) * w},${h - ((v - min) / range) * h}`).join(" ");
+  return (
+    <svg width={w} height={h} className="opacity-60">
+      <polyline fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" points={points} />
+    </svg>
+  );
+}
 
 export default function Dashboard() {
   const { profile } = useAuth();
   const [stats, setStats] = useState({ revenue: 0, paidCount: 0, orderCount: 0, completedCount: 0, productCount: 0, activeProducts: 0, lowStockCount: 0 });
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const [lowStockItems, setLowStockItems] = useState<any[]>([]);
+  const [dailyRevenue, setDailyRevenue] = useState<number[]>([]);
+  const [dailyOrders, setDailyOrders] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -19,13 +38,28 @@ export default function Dashboard() {
 
     Promise.all([
       supabase.from('orders').select('id, order_number, customer_name, status, payment_status, total, created_at').eq('business_id', biz).order('created_at', { ascending: false }).limit(5),
-      supabase.from('orders').select('total, payment_status, status').eq('business_id', biz),
+      supabase.from('orders').select('total, payment_status, status, created_at').eq('business_id', biz),
       supabase.from('products').select('id, status').eq('business_id', biz),
       supabase.from('inventory_items').select('id, quantity, low_stock_threshold, product_id, branch_id, products(name, sku), branches(name)').lte('quantity', 10),
     ]).then(([recentRes, allOrdersRes, prodRes, invRes]) => {
       const allOrders = allOrdersRes.data || [];
       const prods = prodRes.data || [];
       const revenue = allOrders.filter(o => o.payment_status === 'paid').reduce((s, o) => s + Number(o.total), 0);
+
+      // Build 7-day sparkline data
+      const now = new Date();
+      const revByDay: number[] = [];
+      const ordByDay: number[] = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        const dayStr = d.toISOString().slice(0, 10);
+        const dayOrders = allOrders.filter(o => o.created_at?.slice(0, 10) === dayStr);
+        ordByDay.push(dayOrders.length);
+        revByDay.push(dayOrders.filter(o => o.payment_status === 'paid').reduce((s, o) => s + Number(o.total), 0));
+      }
+      setDailyRevenue(revByDay);
+      setDailyOrders(ordByDay);
 
       setStats({
         revenue,
@@ -42,118 +76,195 @@ export default function Dashboard() {
     });
   }, [profile?.business_id]);
 
-  if (loading) return <div className="flex items-center justify-center py-16"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+  if (loading) return (
+    <div className="flex items-center justify-center py-16">
+      <div className="relative h-10 w-10">
+        <div className="absolute inset-0 rounded-full border-2 border-primary/20" />
+        <div className="absolute inset-0 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+      </div>
+    </div>
+  );
 
   const statCards = [
-    { label: "Total Revenue", value: formatNPR(stats.revenue), change: `${stats.paidCount} paid`, up: true, icon: DollarSign },
-    { label: "Total Orders", value: String(stats.orderCount), change: `${stats.completedCount} completed`, up: true, icon: ShoppingCart },
-    { label: "Products", value: String(stats.productCount), change: `${stats.activeProducts} active`, up: true, icon: Package },
-    { label: "Low Stock", value: String(stats.lowStockCount), change: "Needs attention", up: false, icon: AlertTriangle },
+    {
+      label: "Total Revenue", value: formatNPR(stats.revenue),
+      sub: `${stats.paidCount} paid orders`, up: true,
+      icon: DollarSign, sparkline: dailyRevenue,
+      accent: "from-primary/10 to-primary/5 border-primary/15",
+      iconBg: "bg-primary/10 text-primary",
+    },
+    {
+      label: "Total Orders", value: String(stats.orderCount),
+      sub: `${stats.completedCount} completed`, up: true,
+      icon: ShoppingCart, sparkline: dailyOrders,
+      accent: "from-secondary/10 to-secondary/5 border-secondary/15",
+      iconBg: "bg-secondary/10 text-secondary",
+    },
+    {
+      label: "Products", value: String(stats.productCount),
+      sub: `${stats.activeProducts} active`, up: true,
+      icon: Package, sparkline: [],
+      accent: "from-chart-3/10 to-chart-3/5 border-chart-3/15",
+      iconBg: "bg-chart-3/10 text-chart-3",
+    },
+    {
+      label: "Low Stock", value: String(stats.lowStockCount),
+      sub: "Needs attention", up: false,
+      icon: AlertTriangle, sparkline: [],
+      accent: stats.lowStockCount > 0 ? "from-warning/10 to-warning/5 border-warning/15" : "from-success/10 to-success/5 border-success/15",
+      iconBg: stats.lowStockCount > 0 ? "bg-warning/10 text-warning" : "bg-success/10 text-success",
+    },
   ];
 
   return (
-    <div className="space-y-4 md:space-y-6">
-      <div>
-        <h1 className="text-xl md:text-2xl font-display font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground text-xs md:text-sm">Overview of your business performance</p>
+    <div className="space-y-5 md:space-y-8">
+      {/* Header */}
+      <div className="animate-fade-in">
+        <h1 className="text-2xl md:text-3xl font-display font-bold">Dashboard</h1>
+        <p className="text-muted-foreground text-sm mt-1">Overview of your business performance</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-2.5 md:gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {statCards.map(s => (
-          <Card key={s.label}>
-            <CardHeader className="flex flex-row items-center justify-between pb-1 md:pb-2 p-3 md:p-6">
-              <CardTitle className="text-[11px] md:text-sm font-medium text-muted-foreground">{s.label}</CardTitle>
-              <s.icon className="h-3.5 w-3.5 md:h-4 md:w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent className="p-3 pt-0 md:p-6 md:pt-0">
-              <div className="text-lg md:text-2xl font-bold font-display">{s.value}</div>
-              <p className={`text-[10px] md:text-xs mt-0.5 md:mt-1 flex items-center gap-1 ${s.up ? 'text-success' : 'text-warning'}`}>
-                {s.up ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}{s.change}
-              </p>
+      {/* Stat Cards */}
+      <div className="grid grid-cols-2 gap-3 md:gap-5 lg:grid-cols-4">
+        {statCards.map((s, idx) => (
+          <Card
+            key={s.label}
+            className={`relative overflow-hidden bg-gradient-to-br ${s.accent} border animate-slide-up`}
+            style={{ animationDelay: `${idx * 80}ms`, animationFillMode: 'backwards' }}
+          >
+            <CardContent className="p-3.5 md:p-5">
+              <div className="flex items-start justify-between mb-3 md:mb-4">
+                <div className={`h-9 w-9 md:h-10 md:w-10 rounded-xl ${s.iconBg} flex items-center justify-center`}>
+                  <s.icon className="h-4 w-4 md:h-5 md:w-5" />
+                </div>
+                {s.sparkline.length > 1 && (
+                  <MiniSparkline data={s.sparkline} />
+                )}
+              </div>
+              <div className="space-y-1">
+                <p className="text-[11px] md:text-xs font-medium text-muted-foreground uppercase tracking-wider">{s.label}</p>
+                <p className="text-xl md:text-3xl font-bold font-display animate-count-up">{s.value}</p>
+                <div className={`flex items-center gap-1 text-[10px] md:text-xs font-medium ${s.up ? 'text-success' : 'text-warning'}`}>
+                  {s.up ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                  <span>{s.sub}</span>
+                </div>
+              </div>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader className="p-3 md:p-6 pb-2 md:pb-4">
-            <CardTitle className="font-display text-sm md:text-base">Recent Orders</CardTitle>
-            <CardDescription className="text-xs">Latest transactions</CardDescription>
+      {/* Tables Section */}
+      <div className="grid gap-5 lg:grid-cols-2">
+        {/* Recent Orders */}
+        <Card className="card-elevated animate-fade-in" style={{ animationDelay: '300ms', animationFillMode: 'backwards' }}>
+          <CardHeader className="p-4 md:p-6 pb-3 md:pb-4 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="font-display text-base md:text-lg">Recent Orders</CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">Latest transactions</p>
+            </div>
+            <div className="h-8 w-8 rounded-lg bg-primary/8 flex items-center justify-center">
+              <ShoppingCart className="h-4 w-4 text-primary" />
+            </div>
           </CardHeader>
-          <CardContent className="p-0 md:p-6 md:pt-0">
-            {/* Mobile: card list */}
+          <CardContent className="p-0 md:px-6 md:pb-6">
+            {/* Mobile */}
             <div className="md:hidden divide-y">
               {recentOrders.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8 text-sm">No orders yet</p>
+                <p className="text-center text-muted-foreground py-10 text-sm">No orders yet</p>
               ) : recentOrders.map(o => (
-                <div key={o.id} className="flex items-center justify-between px-3 py-2.5">
+                <div key={o.id} className="flex items-center justify-between px-4 py-3 transition-colors hover:bg-accent/30">
                   <div className="min-w-0">
-                    <p className="text-xs font-medium truncate">{o.order_number}</p>
+                    <p className="text-xs font-semibold truncate">{o.order_number}</p>
                     <p className="text-[10px] text-muted-foreground truncate">{o.customer_name}</p>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2.5 shrink-0">
                     <Badge variant="outline" className={`${getStatusColor(o.status)} text-[10px] px-1.5 py-0`}>{o.status}</Badge>
-                    <span className="text-xs font-medium">{formatNPR(o.total)}</span>
+                    <span className="text-xs font-bold font-display">{formatNPR(o.total)}</span>
                   </div>
                 </div>
               ))}
             </div>
-            {/* Desktop: table */}
+            {/* Desktop */}
             <div className="hidden md:block">
               <table className="w-full">
-                <thead><tr className="border-b text-left text-sm text-muted-foreground"><th className="pb-2 font-medium">Order</th><th className="pb-2 font-medium">Customer</th><th className="pb-2 font-medium">Status</th><th className="pb-2 font-medium text-right">Total</th></tr></thead>
+                <thead><tr className="border-b text-left text-xs text-muted-foreground uppercase tracking-wider">
+                  <th className="pb-3 font-medium">Order</th><th className="pb-3 font-medium">Customer</th><th className="pb-3 font-medium">Status</th><th className="pb-3 font-medium text-right">Total</th>
+                </tr></thead>
                 <tbody>
                   {recentOrders.map(o => (
-                    <tr key={o.id} className="border-b last:border-0">
-                      <td className="py-2.5 text-sm font-medium">{o.order_number}</td>
-                      <td className="py-2.5 text-sm">{o.customer_name}</td>
-                      <td className="py-2.5"><Badge variant="outline" className={getStatusColor(o.status)}>{o.status}</Badge></td>
-                      <td className="py-2.5 text-sm text-right">{formatNPR(o.total)}</td>
+                    <tr key={o.id} className="border-b last:border-0 group transition-colors hover:bg-accent/30">
+                      <td className="py-3 text-sm font-semibold">{o.order_number}</td>
+                      <td className="py-3 text-sm text-muted-foreground">{o.customer_name}</td>
+                      <td className="py-3"><Badge variant="outline" className={getStatusColor(o.status)}>{o.status}</Badge></td>
+                      <td className="py-3 text-sm text-right font-bold font-display">{formatNPR(o.total)}</td>
                     </tr>
                   ))}
-                  {recentOrders.length === 0 && <tr><td colSpan={4} className="text-center text-muted-foreground py-8">No orders yet</td></tr>}
+                  {recentOrders.length === 0 && <tr><td colSpan={4} className="text-center text-muted-foreground py-10">No orders yet</td></tr>}
                 </tbody>
               </table>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="p-3 md:p-6 pb-2 md:pb-4">
-            <CardTitle className="font-display text-sm md:text-base">Low Stock Alerts</CardTitle>
-            <CardDescription className="text-xs">Products that need restocking</CardDescription>
+        {/* Low Stock Alerts */}
+        <Card className="card-elevated animate-fade-in" style={{ animationDelay: '400ms', animationFillMode: 'backwards' }}>
+          <CardHeader className="p-4 md:p-6 pb-3 md:pb-4 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="font-display text-base md:text-lg">Low Stock Alerts</CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">Products that need restocking</p>
+            </div>
+            <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${stats.lowStockCount > 0 ? 'bg-warning/10' : 'bg-success/10'}`}>
+              <AlertTriangle className={`h-4 w-4 ${stats.lowStockCount > 0 ? 'text-warning' : 'text-success'}`} />
+            </div>
           </CardHeader>
-          <CardContent className="p-0 md:p-6 md:pt-0">
+          <CardContent className="p-0 md:px-6 md:pb-6">
             <div className="md:hidden divide-y">
               {lowStockItems.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8 text-sm">All stock levels are healthy</p>
+                <div className="text-center py-10">
+                  <div className="h-10 w-10 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-2">
+                    <Package className="h-5 w-5 text-success" />
+                  </div>
+                  <p className="text-sm text-muted-foreground">All stock levels are healthy</p>
+                </div>
               ) : lowStockItems.map((item: any) => (
-                <div key={item.id} className="flex items-center justify-between px-3 py-2.5">
+                <div key={item.id} className="flex items-center justify-between px-4 py-3 hover:bg-accent/30 transition-colors">
                   <div className="min-w-0">
-                    <p className="text-xs font-medium truncate">{item.products?.name || 'Unknown'}</p>
+                    <p className="text-xs font-semibold truncate">{item.products?.name || 'Unknown'}</p>
                     <p className="text-[10px] text-muted-foreground">{item.branches?.name || 'Unknown'}</p>
                   </div>
-                  <div className="text-right shrink-0">
-                    <span className="text-xs font-medium text-destructive">{item.quantity}</span>
-                    <span className="text-[10px] text-muted-foreground"> / {item.low_stock_threshold}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div className="h-full bg-destructive rounded-full" style={{ width: `${Math.min(100, (item.quantity / Math.max(item.low_stock_threshold, 1)) * 100)}%` }} />
+                    </div>
+                    <span className="text-xs font-bold text-destructive">{item.quantity}</span>
+                    <span className="text-[10px] text-muted-foreground">/ {item.low_stock_threshold}</span>
                   </div>
                 </div>
               ))}
             </div>
             <div className="hidden md:block">
               <table className="w-full">
-                <thead><tr className="border-b text-left text-sm text-muted-foreground"><th className="pb-2 font-medium">Product</th><th className="pb-2 font-medium">Branch</th><th className="pb-2 font-medium text-right">Stock</th><th className="pb-2 font-medium text-right">Threshold</th></tr></thead>
+                <thead><tr className="border-b text-left text-xs text-muted-foreground uppercase tracking-wider">
+                  <th className="pb-3 font-medium">Product</th><th className="pb-3 font-medium">Branch</th><th className="pb-3 font-medium">Level</th><th className="pb-3 font-medium text-right">Stock</th>
+                </tr></thead>
                 <tbody>
                   {lowStockItems.map((item: any) => (
-                    <tr key={item.id} className="border-b last:border-0">
-                      <td className="py-2.5 text-sm font-medium">{item.products?.name || 'Unknown'}</td>
-                      <td className="py-2.5 text-sm">{item.branches?.name || 'Unknown'}</td>
-                      <td className="py-2.5 text-sm text-right text-destructive font-medium">{item.quantity}</td>
-                      <td className="py-2.5 text-sm text-right">{item.low_stock_threshold}</td>
+                    <tr key={item.id} className="border-b last:border-0 hover:bg-accent/30 transition-colors">
+                      <td className="py-3 text-sm font-semibold">{item.products?.name || 'Unknown'}</td>
+                      <td className="py-3 text-sm text-muted-foreground">{item.branches?.name || 'Unknown'}</td>
+                      <td className="py-3">
+                        <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
+                          <div className="h-full bg-destructive rounded-full transition-all" style={{ width: `${Math.min(100, (item.quantity / Math.max(item.low_stock_threshold, 1)) * 100)}%` }} />
+                        </div>
+                      </td>
+                      <td className="py-3 text-sm text-right">
+                        <span className="font-bold text-destructive">{item.quantity}</span>
+                        <span className="text-muted-foreground"> / {item.low_stock_threshold}</span>
+                      </td>
                     </tr>
                   ))}
-                  {lowStockItems.length === 0 && <tr><td colSpan={4} className="text-center text-muted-foreground py-8">All stock levels are healthy</td></tr>}
+                  {lowStockItems.length === 0 && <tr><td colSpan={4} className="text-center text-muted-foreground py-10">All stock levels are healthy</td></tr>}
                 </tbody>
               </table>
             </div>

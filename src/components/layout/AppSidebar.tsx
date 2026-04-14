@@ -48,19 +48,27 @@ function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
 
   return (
     <SidebarGroup>
-      <SidebarGroupLabel>{label}</SidebarGroupLabel>
+      <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-sidebar-foreground/40 font-semibold mb-1">{label}</SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu>
-          {visibleItems.map((item) => (
-            <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton asChild isActive={location.pathname === item.url || location.pathname.startsWith(item.url + '/')}>
-                <NavLink to={item.url} end={item.url === '/dashboard'} className="hover:bg-sidebar-accent/50" activeClassName="bg-sidebar-accent text-sidebar-primary font-medium">
-                  <item.icon className="mr-2 h-4 w-4 shrink-0" />
-                  {!collapsed && <span>{item.title}</span>}
-                </NavLink>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
+          {visibleItems.map((item) => {
+            const isActive = location.pathname === item.url || location.pathname.startsWith(item.url + '/');
+            return (
+              <SidebarMenuItem key={item.title}>
+                <SidebarMenuButton asChild isActive={isActive}>
+                  <NavLink
+                    to={item.url}
+                    end={item.url === '/dashboard'}
+                    className={`relative rounded-lg transition-all duration-150 group/nav ${isActive ? 'sidebar-glow text-sidebar-primary font-semibold' : 'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/60'}`}
+                    activeClassName=""
+                  >
+                    <item.icon className={`mr-2.5 h-[18px] w-[18px] shrink-0 transition-colors ${isActive ? 'text-sidebar-primary' : 'text-sidebar-foreground/50 group-hover/nav:text-sidebar-foreground/80'}`} />
+                    {!collapsed && <span className="text-sm">{item.title}</span>}
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            );
+          })}
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>
@@ -84,24 +92,34 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon" className="border-r-0 overflow-hidden">
-      <SidebarHeader className="p-4">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-display font-bold text-sm">{initial}</div>
-          {!collapsed && <span className="font-display font-bold text-lg tracking-tight">{displayName}</span>}
+      <SidebarHeader className="p-4 pb-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-sidebar-primary to-sidebar-primary/70 text-sidebar-primary-foreground font-display font-bold text-sm shadow-lg shadow-sidebar-primary/20">
+            {initial}
+          </div>
+          {!collapsed && (
+            <div className="min-w-0">
+              <span className="font-display font-bold text-base text-sidebar-accent-foreground tracking-tight block truncate">{displayName}</span>
+              <span className="text-[10px] text-sidebar-foreground/40 font-medium">Admin Panel</span>
+            </div>
+          )}
         </div>
       </SidebarHeader>
-      <SidebarContent className="overflow-y-auto scrollbar-none">
+      <SidebarContent className="overflow-y-auto scrollbar-none px-2">
         <NavGroup label="Main" items={mainItems} />
         <NavGroup label="Finance" items={financeItems} />
         <NavGroup label="Operations" items={operationItems} />
       </SidebarContent>
-      <SidebarFooter className="p-3 space-y-2">
+      <SidebarFooter className="p-3 space-y-2 border-t border-sidebar-border">
         {!collapsed && profile?.full_name && (
-          <p className="text-xs text-sidebar-foreground/60 truncate px-2">{profile.full_name}</p>
+          <div className="px-2 py-1">
+            <p className="text-xs font-medium text-sidebar-foreground/80 truncate">{profile.full_name}</p>
+            <p className="text-[10px] text-sidebar-foreground/40 truncate">{profile.email}</p>
+          </div>
         )}
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          <Button variant="ghost" size="icon" onClick={signOut} className="h-8 w-8 text-sidebar-foreground/60 hover:text-sidebar-foreground">
+          <Button variant="ghost" size="icon" onClick={signOut} className="h-8 w-8 text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent">
             <LogOut className="h-4 w-4" />
           </Button>
         </div>
