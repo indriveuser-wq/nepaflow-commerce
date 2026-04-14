@@ -11,24 +11,29 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full">
+      <div className="min-h-screen flex w-full bg-background">
         {!isMobile && <AppSidebar />}
         <div className="flex-1 flex flex-col min-w-0">
           {!isMobile && (
-            <header className="h-14 flex items-center border-b px-4 bg-card/50 backdrop-blur-sm sticky top-0 z-30">
-              <SidebarTrigger className="mr-4" />
+            <header className="h-14 flex items-center border-b px-5 glass-surface sticky top-0 z-30">
+              <SidebarTrigger className="mr-4 hover:bg-accent transition-colors rounded-lg" />
               <div className="flex-1" />
               {role && (
-                <Badge variant="outline" className="capitalize text-xs">
+                <Badge variant="outline" className="capitalize text-[10px] font-semibold tracking-wide border-primary/20 text-primary bg-primary/5">
                   {role}
                 </Badge>
               )}
               {profile?.full_name && (
-                <span className="ml-3 text-sm text-muted-foreground">{profile.full_name}</span>
+                <div className="ml-3 flex items-center gap-2.5">
+                  <div className="h-7 w-7 rounded-full bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center text-primary-foreground text-xs font-bold">
+                    {profile.full_name.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="text-sm font-medium text-muted-foreground">{profile.full_name}</span>
+                </div>
               )}
             </header>
           )}
-          <main className={`flex-1 p-3 md:p-6 overflow-auto ${isMobile ? 'pb-20' : ''}`}>
+          <main className={`flex-1 p-4 md:p-7 overflow-auto ${isMobile ? 'pb-20' : ''}`}>
             {children}
           </main>
         </div>
