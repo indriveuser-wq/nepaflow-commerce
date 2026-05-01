@@ -198,7 +198,7 @@ export default function Products() {
                   <h2 className="text-sm md:text-base font-display font-bold text-foreground/80">{catName}</h2>
                   <Badge variant="secondary" className="text-[10px] md:text-xs font-semibold bg-primary/8 text-primary border-0">{grouped[catName].length}</Badge>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 md:gap-4">
+                <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-3">
                   {grouped[catName].map(p => (
                     <Card key={p.id} className="group card-interactive overflow-hidden">
                       {/* Image area */}
