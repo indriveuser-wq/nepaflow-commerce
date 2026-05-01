@@ -466,6 +466,57 @@ export type Database = {
           },
         ]
       }
+      shipments: {
+        Row: {
+          branch_id: string
+          business_id: string
+          courier: string
+          created_at: string
+          created_by: string | null
+          customer_name: string
+          estimated_delivery: string | null
+          id: string
+          notes: string | null
+          order_id: string | null
+          order_number: string | null
+          status: string
+          tracking_number: string | null
+          updated_at: string
+        }
+        Insert: {
+          branch_id: string
+          business_id: string
+          courier?: string
+          created_at?: string
+          created_by?: string | null
+          customer_name?: string
+          estimated_delivery?: string | null
+          id?: string
+          notes?: string | null
+          order_id?: string | null
+          order_number?: string | null
+          status?: string
+          tracking_number?: string | null
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string
+          business_id?: string
+          courier?: string
+          created_at?: string
+          created_by?: string | null
+          customer_name?: string
+          estimated_delivery?: string | null
+          id?: string
+          notes?: string | null
+          order_id?: string | null
+          order_number?: string | null
+          status?: string
+          tracking_number?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       staff_invitations: {
         Row: {
           branch_id: string

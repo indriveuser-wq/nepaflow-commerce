@@ -198,7 +198,7 @@ export default function Products() {
                   <h2 className="text-sm md:text-base font-display font-bold text-foreground/80">{catName}</h2>
                   <Badge variant="secondary" className="text-[10px] md:text-xs font-semibold bg-primary/8 text-primary border-0">{grouped[catName].length}</Badge>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 md:gap-4">
                   {grouped[catName].map(p => (
                     <Card key={p.id} className="group card-interactive overflow-hidden">
                       {/* Image area */}
@@ -206,7 +206,7 @@ export default function Products() {
                         {p.image_url ? (
                           <img src={p.image_url} alt={p.name} className="h-full w-full object-cover" />
                         ) : (
-                          <Package className="h-8 w-8 md:h-12 md:w-12 text-muted-foreground/25" />
+                          <Package className="h-6 w-6 md:h-12 md:w-12 text-muted-foreground/25" />
                         )}
                         {/* Hover overlay */}
                         {canManage && (
@@ -220,25 +220,25 @@ export default function Products() {
                           </div>
                         )}
                         {/* Status badge */}
-                        <Badge variant="outline" className={`${getStatusColor(p.status)} absolute top-2 right-2 text-[10px] md:text-xs font-semibold backdrop-blur-md bg-card/80`}>
+                        <Badge variant="outline" className={`${getStatusColor(p.status)} absolute top-1.5 right-1.5 md:top-2 md:right-2 text-[8px] md:text-xs font-semibold backdrop-blur-md bg-card/80 px-1.5 py-0 md:px-2 md:py-0.5`}>
                           {p.status}
                         </Badge>
                       </div>
-                      <CardContent className="p-3 md:p-4">
-                        <h3 className="font-semibold text-xs md:text-sm leading-tight mb-0.5 line-clamp-2">{p.name}</h3>
-                        {p.sku && <p className="text-[10px] md:text-xs text-muted-foreground mb-2 truncate font-mono">{p.sku}</p>}
-                        <div className="flex items-end justify-between mt-2">
+                      <CardContent className="p-2 md:p-4">
+                        <h3 className="font-semibold text-[11px] md:text-sm leading-tight mb-0.5 line-clamp-2">{p.name}</h3>
+                        {p.sku && <p className="text-[9px] md:text-xs text-muted-foreground mb-1 md:mb-2 truncate font-mono">{p.sku}</p>}
+                        <div className="flex items-end justify-between mt-1 md:mt-2">
                           <div>
-                            <p className="text-base md:text-lg font-bold font-display text-primary">{formatNPR(p.selling_price)}</p>
+                            <p className="text-xs md:text-lg font-bold font-display text-primary leading-tight">{formatNPR(p.selling_price)}</p>
                             {p.cost_price > 0 && (
-                              <p className="text-[10px] text-muted-foreground">Cost: {formatNPR(p.cost_price)}</p>
+                              <p className="text-[9px] md:text-[10px] text-muted-foreground">Cost: {formatNPR(p.cost_price)}</p>
                             )}
                           </div>
                           {/* Mobile edit buttons */}
                           {canManage && (
                             <div className="flex gap-0.5 md:hidden">
-                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={e => { e.stopPropagation(); openEditForm(p); }}><Edit className="h-3 w-3" /></Button>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={e => { e.stopPropagation(); setDeleteConfirm(p.id); }}><Trash2 className="h-3 w-3" /></Button>
+                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={e => { e.stopPropagation(); openEditForm(p); }}><Edit className="h-2.5 w-2.5" /></Button>
+                              <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={e => { e.stopPropagation(); setDeleteConfirm(p.id); }}><Trash2 className="h-2.5 w-2.5" /></Button>
                             </div>
                           )}
                         </div>
