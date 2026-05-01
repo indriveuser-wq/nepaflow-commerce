@@ -125,28 +125,30 @@ export default function Dashboard() {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 gap-3 md:gap-5 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 md:gap-5 lg:grid-cols-4">
         {statCards.map((s, idx) => (
           <Card
             key={s.label}
             className={`relative overflow-hidden bg-gradient-to-br ${s.accent} border animate-slide-up`}
             style={{ animationDelay: `${idx * 80}ms`, animationFillMode: 'backwards' }}
           >
-            <CardContent className="p-3.5 md:p-5">
-              <div className="flex items-start justify-between mb-3 md:mb-4">
-                <div className={`h-9 w-9 md:h-10 md:w-10 rounded-xl ${s.iconBg} flex items-center justify-center`}>
-                  <s.icon className="h-4 w-4 md:h-5 md:w-5" />
+            <CardContent className="p-2.5 md:p-5">
+              <div className="flex items-start justify-between mb-2 md:mb-4">
+                <div className={`h-7 w-7 md:h-10 md:w-10 rounded-lg md:rounded-xl ${s.iconBg} flex items-center justify-center`}>
+                  <s.icon className="h-3.5 w-3.5 md:h-5 md:w-5" />
                 </div>
                 {s.sparkline.length > 1 && (
-                  <MiniSparkline data={s.sparkline} />
+                  <div className="scale-75 md:scale-100 origin-top-right -mt-0.5">
+                    <MiniSparkline data={s.sparkline} />
+                  </div>
                 )}
               </div>
-              <div className="space-y-1">
-                <p className="text-[11px] md:text-xs font-medium text-muted-foreground uppercase tracking-wider">{s.label}</p>
-                <p className="text-xl md:text-3xl font-bold font-display animate-count-up">{s.value}</p>
-                <div className={`flex items-center gap-1 text-[10px] md:text-xs font-medium ${s.up ? 'text-success' : 'text-warning'}`}>
+              <div className="space-y-0.5 md:space-y-1">
+                <p className="text-[9px] md:text-xs font-medium text-muted-foreground uppercase tracking-wider truncate">{s.label}</p>
+                <p className="text-base md:text-3xl font-bold font-display animate-count-up leading-tight truncate">{s.value}</p>
+                <div className={`flex items-center gap-0.5 text-[9px] md:text-xs font-medium ${s.up ? 'text-success' : 'text-warning'}`}>
                   {s.up ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                  <span>{s.sub}</span>
+                  <span className="truncate">{s.sub}</span>
                 </div>
               </div>
             </CardContent>
