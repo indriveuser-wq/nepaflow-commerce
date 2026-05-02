@@ -18,6 +18,7 @@ type OrderRow = {
   status: string;
   payment_status: string;
   total: number;
+  source?: string;
 };
 
 export default function Orders() {
@@ -33,13 +34,20 @@ export default function Orders() {
     const load = async () => {
       const { data } = await supabase
         .from('orders')
-        .select('id, order_number, customer_name, created_at, status, payment_status, total')
+        .select('id, order_number, customer_name, created_at, status, payment_status, total, source')
         .eq('business_id', profile.business_id!)
         .order('created_at', { ascending: false });
       setOrders((data as OrderRow[]) || []);
       setLoading(false);
     };
     load();
+
+    const channel = supabase
+      .channel('orders-list')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `business_id=eq.${profile.business_id}` },
+        () => load())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [profile?.business_id]);
 
   const filtered = orders.filter(o => {
@@ -80,9 +88,10 @@ export default function Orders() {
               <SelectTrigger className="w-full sm:w-[140px] md:w-[180px] h-9 md:h-10"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="received">Received</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="confirmed">Confirmed</SelectItem>
-                <SelectItem value="processing">Processing</SelectItem>
+                <SelectItem value="packed">Packed</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
                 <SelectItem value="cancelled">Cancelled</SelectItem>
               </SelectContent>
@@ -100,6 +109,7 @@ export default function Orders() {
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium">{o.order_number}</p>
                     <Badge variant="outline" className={`${getStatusColor(o.status)} text-[10px] px-1.5 py-0`}>{o.status}</Badge>
+                    {o.source === 'online' && <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-secondary/10 text-secondary border-secondary/20">Online</Badge>}
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">{o.customer_name} · {formatDate(o.created_at)}</p>
                 </div>
@@ -127,7 +137,10 @@ export default function Orders() {
                 {filtered.map(o => (
                   <tr key={o.id} className="border-b last:border-0 cursor-pointer hover:bg-accent/50" onClick={() => navigate(`/orders/${o.id}`)}>
                     <td className="py-2.5 text-sm font-medium">{o.order_number}</td>
-                    <td className="py-2.5 text-sm">{o.customer_name}</td>
+                    <td className="py-2.5 text-sm">
+                      <span>{o.customer_name}</span>
+                      {o.source === 'online' && <Badge variant="outline" className="ml-2 text-[10px] bg-secondary/10 text-secondary border-secondary/20">Online</Badge>}
+                    </td>
                     <td className="py-2.5 text-sm text-muted-foreground">{formatDate(o.created_at)}</td>
                     <td className="py-2.5"><Badge variant="outline" className={getStatusColor(o.status)}>{o.status}</Badge></td>
                     <td className="py-2.5"><Badge variant="outline" className={getStatusColor(o.payment_status)}>{o.payment_status}</Badge></td>
