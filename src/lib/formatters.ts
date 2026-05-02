@@ -25,6 +25,8 @@ export const generateInvoiceNumber = (): string => {
 
 export const getStatusColor = (status: string): string => {
   const colors: Record<string, string> = {
+    received: 'bg-primary/10 text-primary border-primary/20',
+    packed: 'bg-secondary/10 text-secondary border-secondary/20',
     pending: 'bg-warning/10 text-warning border-warning/20',
     confirmed: 'bg-primary/10 text-primary border-primary/20',
     processing: 'bg-secondary/10 text-secondary border-secondary/20',
