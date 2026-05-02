@@ -27,6 +27,8 @@ import Staff from "./pages/Staff";
 import Settings from "./pages/Settings";
 import NewOrder from "./pages/NewOrder";
 import NotFound from "./pages/NotFound";
+import PublicShop from "./pages/public/PublicShop";
+import TrackOrder from "./pages/public/TrackOrder";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +50,8 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/setup-business" element={<SetupBusiness />} />
+            <Route path="/shop/:slug" element={<PublicShop />} />
+            <Route path="/shop/:slug/track" element={<TrackOrder />} />
             <Route path="/dashboard" element={<P><Dashboard /></P>} />
             <Route path="/products" element={<P><Products /></P>} />
             <Route path="/inventory" element={<P><Inventory /></P>} />
