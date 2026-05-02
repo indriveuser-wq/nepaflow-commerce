@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Building, MapPin, Receipt, Bell } from "lucide-react";
+import { Building, MapPin, Receipt, Bell, Copy, ExternalLink, Globe } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -83,6 +83,26 @@ export default function Settings() {
         </TabsList>
 
         <TabsContent value="business">
+          {business?.slug && (
+            <Card className="mb-4 border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
+              <CardHeader>
+                <CardTitle className="font-display flex items-center gap-2"><Globe className="h-4 w-4 text-primary" />Public Storefront</CardTitle>
+                <CardDescription>Share this link so customers can browse and place orders online</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Input readOnly value={`${window.location.origin}/shop/${business.slug}`} className="font-mono text-xs md:text-sm" />
+                  <Button variant="outline" size="icon" onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/shop/${business.slug}`); toast.success("Link copied"); }}>
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="icon" onClick={() => window.open(`/shop/${business.slug}`, '_blank')}>
+                    <ExternalLink className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">Customers can place orders without logging in. New orders appear in your Orders list with status <span className="font-medium text-foreground">Received</span>.</p>
+              </CardContent>
+            </Card>
+          )}
           <Card>
             <CardHeader>
               <CardTitle className="font-display">Business Information</CardTitle>
