@@ -62,6 +62,7 @@ export type Database = {
           logo_url: string | null
           name: string
           phone: string | null
+          slug: string
           tax_id: string | null
         }
         Insert: {
@@ -73,6 +74,7 @@ export type Database = {
           logo_url?: string | null
           name: string
           phone?: string | null
+          slug: string
           tax_id?: string | null
         }
         Update: {
@@ -84,6 +86,7 @@ export type Database = {
           logo_url?: string | null
           name?: string
           phone?: string | null
+          slug?: string
           tax_id?: string | null
         }
         Relationships: []
@@ -278,16 +281,19 @@ export type Database = {
           created_by: string | null
           customer_id: string | null
           customer_name: string
+          customer_phone: string | null
           discount: number
           id: string
           notes: string | null
           order_number: string
           payment_method: string
           payment_status: string
+          source: string
           status: string
           subtotal: number
           tax: number
           total: number
+          updated_at: string
         }
         Insert: {
           branch_id: string
@@ -296,16 +302,19 @@ export type Database = {
           created_by?: string | null
           customer_id?: string | null
           customer_name?: string
+          customer_phone?: string | null
           discount?: number
           id?: string
           notes?: string | null
           order_number: string
           payment_method?: string
           payment_status?: string
+          source?: string
           status?: string
           subtotal?: number
           tax?: number
           total?: number
+          updated_at?: string
         }
         Update: {
           branch_id?: string
@@ -314,16 +323,19 @@ export type Database = {
           created_by?: string | null
           customer_id?: string | null
           customer_name?: string
+          customer_phone?: string | null
           discount?: number
           id?: string
           notes?: string | null
           order_number?: string
           payment_method?: string
           payment_status?: string
+          source?: string
           status?: string
           subtotal?: number
           tax?: number
           total?: number
+          updated_at?: string
         }
         Relationships: [
           {
@@ -715,6 +727,33 @@ export type Database = {
         Returns: undefined
       }
       check_invitation: { Args: { _email: string }; Returns: boolean }
+      create_public_order: {
+        Args: {
+          _branch_id: string
+          _customer_name: string
+          _customer_phone: string
+          _items: Json
+          _notes?: string
+          _slug: string
+        }
+        Returns: Json
+      }
+      get_public_order: {
+        Args: { _order_number: string; _phone: string }
+        Returns: Json
+      }
+      get_public_products: {
+        Args: { _slug: string }
+        Returns: {
+          category_id: string
+          category_name: string
+          id: string
+          image_url: string
+          name: string
+          selling_price: number
+        }[]
+      }
+      get_public_shop: { Args: { _slug: string }; Returns: Json }
       get_user_branch_id: { Args: { _user_id: string }; Returns: string }
       get_user_business_id: { Args: { _user_id: string }; Returns: string }
       has_role: {
