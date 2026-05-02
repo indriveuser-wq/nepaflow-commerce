@@ -5,12 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, FileText, Package } from "lucide-react";
+import { ArrowLeft, FileText, Package, Phone } from "lucide-react";
 import { formatNPR, formatDateTime, getStatusColor } from "@/lib/formatters";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
 
-type OrderRow = { id: string; order_number: string; customer_name: string; customer_id: string | null; branch_id: string; created_at: string; subtotal: number; discount: number; tax: number; total: number; status: string; payment_status: string; payment_method: string; notes: string | null };
+type OrderRow = { id: string; order_number: string; customer_name: string; customer_id: string | null; customer_phone: string | null; source: string | null; branch_id: string; created_at: string; updated_at?: string; subtotal: number; discount: number; tax: number; total: number; status: string; payment_status: string; payment_method: string; notes: string | null };
 type OrderItemRow = { id: string; product_id: string | null; custom_name: string | null; unit_price: number; quantity: number; discount: number; total: number; notes: string | null };
 
 export default function OrderDetail() {
@@ -22,14 +24,14 @@ export default function OrderDetail() {
   const [productNames, setProductNames] = useState<Record<string, string>>({});
   const [branchName, setBranchName] = useState('');
   const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
 
-  useEffect(() => {
+  const load = async () => {
     if (!id) return;
-    const load = async () => {
-      const [orderRes, itemsRes] = await Promise.all([
-        supabase.from('orders').select('*').eq('id', id).single(),
-        supabase.from('order_items').select('*').eq('order_id', id),
-      ]);
+    const [orderRes, itemsRes] = await Promise.all([
+      supabase.from('orders').select('*').eq('id', id).single(),
+      supabase.from('order_items').select('*').eq('order_id', id),
+    ]);
       const o = orderRes.data as OrderRow | null;
       setOrder(o);
       const oi = (itemsRes.data || []) as OrderItemRow[];
@@ -49,9 +51,30 @@ export default function OrderDetail() {
         setProductNames(map);
       }
       setLoading(false);
-    };
+  };
+
+  useEffect(() => {
     load();
+    if (!id) return;
+    const channel = supabase
+      .channel(`order-${id}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders', filter: `id=eq.${id}` },
+        () => load())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  const updateStatus = async (newStatus: string) => {
+    if (!order) return;
+    setUpdating(true);
+    const patch: any = { status: newStatus };
+    if (newStatus === 'completed') patch.payment_status = 'paid';
+    const { error } = await supabase.from('orders').update(patch).eq('id', order.id);
+    setUpdating(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success(`Order marked as ${newStatus}`);
+  };
 
   if (loading) return <div className="flex items-center justify-center py-16"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
 
@@ -62,12 +85,35 @@ export default function OrderDetail() {
     </div>
   );
 
-  const timeline = [
-    { label: 'Order Created', time: formatDateTime(order.created_at), done: true },
-    { label: 'Confirmed', time: ['confirmed', 'processing', 'completed'].includes(order.status) ? 'Completed' : '', done: ['confirmed', 'processing', 'completed'].includes(order.status) },
-    { label: 'Processing', time: '', done: ['processing', 'completed'].includes(order.status) },
-    { label: 'Completed', time: '', done: order.status === 'completed' },
-  ];
+  const isOnline = order.source === 'online';
+  const stages = isOnline
+    ? ['received', 'confirmed', 'packed', 'completed']
+    : ['pending', 'confirmed', 'packed', 'completed'];
+  const stageLabels: Record<string, string> = {
+    received: 'Received', pending: 'Created', confirmed: 'Confirmed',
+    packed: 'Packed', completed: 'Completed', cancelled: 'Cancelled',
+  };
+  const currentStageIdx = stages.indexOf(order.status);
+  const timeline = stages.map((s, idx) => ({
+    label: stageLabels[s],
+    time: idx === 0 ? formatDateTime(order.created_at) : (idx === currentStageIdx && order.updated_at ? formatDateTime(order.updated_at) : ''),
+    done: currentStageIdx >= idx,
+  }));
+
+  // Next status options
+  const nextOptions: string[] = [];
+  if (order.status !== 'completed' && order.status !== 'cancelled') {
+    if (isOnline) {
+      if (order.status === 'received') nextOptions.push('confirmed');
+      if (order.status === 'confirmed') nextOptions.push('packed');
+      if (order.status === 'packed') nextOptions.push('completed');
+    } else {
+      if (order.status === 'pending') nextOptions.push('confirmed');
+      if (order.status === 'confirmed') nextOptions.push('packed');
+      if (order.status === 'packed') nextOptions.push('completed');
+    }
+    nextOptions.push('cancelled');
+  }
 
   return (
     <div className="space-y-4 md:space-y-6 pb-6">
@@ -80,10 +126,28 @@ export default function OrderDetail() {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Badge variant="outline" className={`${getStatusColor(order.status)} text-xs md:text-sm px-2 md:px-3 py-0.5 md:py-1`}>{order.status}</Badge>
+          {isOnline && <Badge variant="outline" className="text-[10px] md:text-xs bg-secondary/10 text-secondary border-secondary/20">Online</Badge>}
           <Button variant="outline" size="sm" className="hidden sm:flex" onClick={() => navigate(`/invoices/${order.id}`)}><FileText className="h-4 w-4 mr-1" />Invoice</Button>
           <Button variant="outline" size="icon" className="sm:hidden h-8 w-8" onClick={() => navigate(`/invoices/${order.id}`)}><FileText className="h-4 w-4" /></Button>
         </div>
       </div>
+
+      {nextOptions.length > 0 && (
+        <Card>
+          <CardContent className="p-3 md:p-4 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+            <p className="text-sm font-medium flex-1">Update order status</p>
+            <div className="flex gap-2 flex-wrap">
+              {nextOptions.map(s => (
+                <Button key={s} size="sm" variant={s === 'cancelled' ? 'outline' : 'default'}
+                  className={s === 'cancelled' ? 'text-destructive border-destructive/30 hover:bg-destructive/10' : ''}
+                  onClick={() => updateStatus(s)} disabled={updating}>
+                  Mark as {stageLabels[s] || s}
+                </Button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 md:gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-4 md:space-y-6">
@@ -165,6 +229,11 @@ export default function OrderDetail() {
               <CardHeader className="px-3 md:px-6 pb-2 md:pb-3"><CardTitle className="font-display text-sm md:text-lg">Customer</CardTitle></CardHeader>
               <CardContent className="px-3 md:px-6">
                 <p className="font-medium text-sm">{order.customer_name}</p>
+                {order.customer_phone && (
+                  <a href={`tel:${order.customer_phone}`} className="flex items-center gap-1 text-xs text-primary mt-0.5">
+                    <Phone className="h-3 w-3" />{order.customer_phone}
+                  </a>
+                )}
                 {order.customer_id && <Button variant="link" className="p-0 h-auto text-xs md:text-sm" onClick={() => navigate(`/customers/${order.customer_id}`)}>View →</Button>}
               </CardContent>
             </Card>
