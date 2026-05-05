@@ -467,6 +467,25 @@ export default function Products() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Barcode Scanner Overlay */}
+      {scannerOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4" onClick={stopScanner}>
+          <div className="w-full max-w-md bg-card rounded-xl p-4 space-y-3" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 font-display font-bold">
+                <ScanBarcode className="h-5 w-5" /> Scan Barcode
+              </div>
+              <Button variant="ghost" size="icon" onClick={stopScanner}><X className="h-4 w-4" /></Button>
+            </div>
+            <p className="text-xs text-muted-foreground">Point your rear camera at a barcode or QR code.</p>
+            <div className="relative w-full overflow-hidden rounded-lg bg-black aspect-video">
+              <div id="product-barcode-scanner-region" className="w-full h-full [&_video]:w-full [&_video]:h-full [&_video]:object-cover" />
+            </div>
+            <Button variant="outline" className="w-full" onClick={stopScanner}>Cancel</Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
