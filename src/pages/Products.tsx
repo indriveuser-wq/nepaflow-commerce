@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,11 +8,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Search, Edit, Trash2, Package, FolderOpen, Eye } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Package, FolderOpen, Eye, ScanBarcode, X } from "lucide-react";
 import { formatNPR, getStatusColor } from "@/lib/formatters";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
+import { normalizeBarcode } from "@/lib/barcode";
 
 type Product = {
   id: string; name: string; sku: string | null; barcode: string | null;
