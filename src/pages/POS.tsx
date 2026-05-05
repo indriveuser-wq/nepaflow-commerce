@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, ShoppingBag, ShoppingCart } from "lucide-react";
+import { Search, ShoppingBag, ShoppingCart, ScanBarcode } from "lucide-react";
 import { formatNPR } from "@/lib/formatters";
 import { usePOSStore } from "@/stores/pos-store";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -12,6 +12,8 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { BarcodeScanner } from "@/components/pos/BarcodeScanner";
+import { toast } from "sonner";
 
 type ProductRow = { id: string; name: string; sku: string | null; barcode: string | null; category_id: string | null; selling_price: number; status: string };
 type CategoryRow = { id: string; name: string };
@@ -19,6 +21,7 @@ type CategoryRow = { id: string; name: string };
 export default function POS() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [scannerOpen, setScannerOpen] = useState(false);
   const store = usePOSStore();
   const isMobile = useIsMobile();
   const { profile } = useAuth();
@@ -46,6 +49,20 @@ export default function POS() {
     store.addItem({ product_id: product.id, name: product.name, price: product.selling_price, quantity: 1, discount: 0, is_custom: false, notes: '' });
   };
 
+  const handleScanned = (code: string) => {
+    const trimmed = code.trim();
+    const match = products.find(p => (p.barcode || '').trim() === trimmed)
+      || products.find(p => (p.sku || '').trim().toLowerCase() === trimmed.toLowerCase());
+    if (match) {
+      addProduct(match);
+      toast.success(`Added: ${match.name}`);
+    } else {
+      setSearch(trimmed);
+      toast.error(`No product matches "${trimmed}"`);
+    }
+    setScannerOpen(false);
+  };
+
   const productGrid = (
     <div className="flex-1 flex flex-col min-w-0">
       <div className="flex items-center gap-2 mb-3">
@@ -53,6 +70,9 @@ export default function POS() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Search or scan barcode..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" autoFocus />
         </div>
+        <Button variant="outline" size="icon" onClick={() => setScannerOpen(true)} title="Scan barcode">
+          <ScanBarcode className="h-4 w-4" />
+        </Button>
         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
           <SelectTrigger className="w-[100px] md:w-[140px]"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -87,6 +107,7 @@ export default function POS() {
     return (
       <div className="flex flex-col h-[calc(100vh-8rem)]">
         {productGrid}
+        <BarcodeScanner open={scannerOpen} onOpenChange={setScannerOpen} onDetected={handleScanned} />
         <Sheet>
           <SheetTrigger asChild>
             <Button size="lg" className="fixed bottom-[4.5rem] right-4 z-40 rounded-full h-14 w-14 shadow-lg">
@@ -112,6 +133,7 @@ export default function POS() {
       <Card className="w-[380px] flex flex-col shrink-0">
         <POSCart className="flex flex-col h-full" />
       </Card>
+      <BarcodeScanner open={scannerOpen} onOpenChange={setScannerOpen} onDetected={handleScanned} />
     </div>
   );
 }
