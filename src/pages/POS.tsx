@@ -15,6 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
+import { barcodesMatch, normalizeBarcode } from "@/lib/barcode";
 
 type ProductRow = { id: string; name: string; sku: string | null; barcode: string | null; category_id: string | null; selling_price: number; status: string };
 type CategoryRow = { id: string; name: string };
@@ -54,9 +55,9 @@ export default function POS() {
   };
 
   const handleScanned = (code: string) => {
-    const trimmed = code.trim();
+    const trimmed = normalizeBarcode(code);
     const list = productsRef.current;
-    const match = list.find(p => (p.barcode || '').trim() === trimmed)
+    const match = list.find(p => barcodesMatch(p.barcode, trimmed))
       || list.find(p => (p.sku || '').trim().toLowerCase() === trimmed.toLowerCase());
     if (match) {
       addProduct(match);
