@@ -134,6 +134,63 @@ export default function Products() {
 
   const updateField = (field: string, value: string) => setForm(prev => ({ ...prev, [field]: value }));
 
+  // ---------- Barcode scanner (for filling Barcode field) ----------
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+
+  const stopScanner = async () => {
+    const s = scannerRef.current;
+    scannerRef.current = null;
+    if (s) {
+      try { if (s.isScanning) await s.stop(); } catch {}
+      try { await s.clear(); } catch {}
+    }
+    setScannerOpen(false);
+  };
+
+  const startScanner = async () => {
+    setScannerOpen(true);
+    await new Promise(r => requestAnimationFrame(() => r(null)));
+    const region = document.getElementById("product-barcode-scanner-region");
+    if (!region) { toast.error("Scanner region missing"); setScannerOpen(false); return; }
+    try {
+      const scanner = new Html5Qrcode("product-barcode-scanner-region", {
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.QR_CODE,
+        ],
+        verbose: false,
+      });
+      scannerRef.current = scanner;
+      const onSuccess = (text: string) => {
+        const code = normalizeBarcode(text);
+        updateField('barcode', code);
+        toast.success(`Scanned: ${code}`);
+        stopScanner();
+      };
+      const onErr = () => {};
+      try {
+        await scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 260, height: 160 } }, onSuccess, onErr);
+      } catch {
+        const cams = await Html5Qrcode.getCameras();
+        if (!cams || cams.length === 0) throw new Error("No camera found");
+        const back = cams.find(c => /back|rear|environment/i.test(c.label)) || cams[cams.length - 1];
+        await scanner.start(back.id, { fps: 10, qrbox: { width: 260, height: 160 } }, onSuccess, onErr);
+      }
+    } catch (err: any) {
+      const msg = err?.name === "NotAllowedError"
+        ? "Camera permission denied. Allow camera access in browser settings."
+        : err?.message || "Unable to access camera";
+      toast.error(msg);
+      stopScanner();
+    }
+  };
+
   if (loading) return (
     <div className="flex items-center justify-center py-16">
       <div className="relative h-10 w-10">
@@ -333,7 +390,15 @@ export default function Products() {
                   <SelectContent>{categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2"><Label className="text-xs font-semibold uppercase tracking-wider">Barcode</Label><Input value={form.barcode} onChange={e => updateField('barcode', e.target.value)} placeholder="Barcode" className="bg-muted/40 border-0 focus-visible:ring-1 font-mono" /></div>
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold uppercase tracking-wider">Barcode</Label>
+                <div className="flex gap-2">
+                  <Input value={form.barcode} onChange={e => updateField('barcode', e.target.value)} placeholder="Barcode" className="bg-muted/40 border-0 focus-visible:ring-1 font-mono" />
+                  <Button type="button" variant="outline" size="icon" onClick={startScanner} title="Scan barcode">
+                    <ScanBarcode className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
