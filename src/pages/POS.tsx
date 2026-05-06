@@ -195,7 +195,7 @@ export default function POS() {
             </Button>
           </SheetTrigger>
           <SheetContent side="bottom" className="h-[85vh] rounded-t-2xl flex flex-col p-0">
-            <POSCart className="flex flex-col h-full" />
+            <POSCart className="flex flex-col h-full" onScan={startScanner} />
           </SheetContent>
         </Sheet>
       </div>
@@ -206,7 +206,7 @@ export default function POS() {
     <div className="flex h-[calc(100vh-5rem)] gap-4">
       {productGrid}
       <Card className="w-[380px] flex flex-col shrink-0">
-        <POSCart className="flex flex-col h-full" />
+        <POSCart className="flex flex-col h-full" onScan={startScanner} />
       </Card>
       {scannerOverlay}
     </div>
