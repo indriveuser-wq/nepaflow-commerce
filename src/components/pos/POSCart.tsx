@@ -5,7 +5,7 @@ import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Minus, Trash2, User, ShoppingBag, CreditCard, Banknote, QrCode } from "lucide-react";
+import { Plus, Minus, Trash2, User, ShoppingBag, CreditCard, Banknote, QrCode, ScanBarcode } from "lucide-react";
 import { formatNPR } from "@/lib/formatters";
 import { usePOSStore } from "@/stores/pos-store";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,9 +16,10 @@ import { useState, useEffect } from "react";
 
 interface POSCartProps {
   className?: string;
+  onScan?: () => void;
 }
 
-export function POSCart({ className }: POSCartProps) {
+export function POSCart({ className, onScan }: POSCartProps) {
   const [showCustomProduct, setShowCustomProduct] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
   const [showCustomerSearch, setShowCustomerSearch] = useState(false);
@@ -116,7 +117,13 @@ export function POSCart({ className }: POSCartProps) {
       <div className="p-3 pb-2">
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-display text-lg font-bold">Cart</h2>
-          <Dialog open={showCustomProduct} onOpenChange={setShowCustomProduct}>
+          <div className="flex items-center gap-2">
+            {onScan && (
+              <Button size="sm" variant="outline" onClick={onScan} title="Scan barcode">
+                <ScanBarcode className="h-3 w-3 mr-1" />Scan
+              </Button>
+            )}
+            <Dialog open={showCustomProduct} onOpenChange={setShowCustomProduct}>
             <DialogTrigger asChild>
               <Button size="sm" variant="outline"><Plus className="h-3 w-3 mr-1" />Custom</Button>
             </DialogTrigger>
@@ -135,7 +142,8 @@ export function POSCart({ className }: POSCartProps) {
                 <Button className="w-full" onClick={addCustomProduct}>Add to Cart</Button>
               </div>
             </DialogContent>
-          </Dialog>
+            </Dialog>
+          </div>
         </div>
         {/* Customer */}
         {store.customer ? (
