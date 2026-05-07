@@ -27,6 +27,9 @@ export default function POS() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const productsRef = useRef<ProductRow[]>([]);
+  const pausedRef = useRef(false);
+  const lastScanRef = useRef<{ code: string; at: number } | null>(null);
+  const qtyInputRef = useRef<HTMLInputElement | null>(null);
   const [pendingScan, setPendingScan] = useState<{ product: ProductRow; qty: number } | null>(null);
   const store = usePOSStore();
   const isMobile = useIsMobile();
@@ -57,14 +60,29 @@ export default function POS() {
   };
 
   const handleScanned = (code: string) => {
+    if (pausedRef.current) return;
     const trimmed = normalizeBarcode(code);
+    // Debounce duplicate frames of the same code
+    const now = Date.now();
+    if (lastScanRef.current && lastScanRef.current.code === trimmed && now - lastScanRef.current.at < 1500) {
+      return;
+    }
+    lastScanRef.current = { code: trimmed, at: now };
     const list = productsRef.current;
     const match = list.find(p => barcodesMatch(p.barcode, trimmed))
       || list.find(p => (p.sku || '').trim().toLowerCase() === trimmed.toLowerCase());
     if (match) {
       // Pause scanning and prompt for quantity confirmation
+      pausedRef.current = true;
       try { scannerRef.current?.pause(true); } catch {}
       setPendingScan({ product: match, qty: 1 });
+      // Focus quantity input on next frame for fast keyboard entry
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          qtyInputRef.current?.focus();
+          qtyInputRef.current?.select();
+        }, 50);
+      });
     } else {
       toast.error(`No product matches "${trimmed}"`);
       // Keep scanner open so user can try another code
@@ -76,6 +94,9 @@ export default function POS() {
     if (s) {
       try { s.resume(); } catch {}
     }
+    // Clear duplicate guard so the next (possibly same) barcode can register
+    lastScanRef.current = null;
+    pausedRef.current = false;
   };
 
   const confirmPendingScan = () => {
@@ -95,6 +116,8 @@ export default function POS() {
 
   const stopScanner = async () => {
     setPendingScan(null);
+    pausedRef.current = false;
+    lastScanRef.current = null;
     const s = scannerRef.current;
     scannerRef.current = null;
     if (s) {
@@ -217,10 +240,12 @@ export default function POS() {
                 <span className="text-sm">Qty</span>
                 <Button variant="outline" size="icon" onClick={() => setPendingScan(p => p ? { ...p, qty: Math.max(1, p.qty - 1) } : p)}>−</Button>
                 <Input
+                  ref={qtyInputRef}
                   type="number"
                   min={1}
                   value={pendingScan.qty}
                   onChange={e => setPendingScan(p => p ? { ...p, qty: Math.max(1, parseInt(e.target.value) || 1) } : p)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); confirmPendingScan(); } }}
                   className="text-center"
                 />
                 <Button variant="outline" size="icon" onClick={() => setPendingScan(p => p ? { ...p, qty: p.qty + 1 } : p)}>+</Button>
