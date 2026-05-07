@@ -200,6 +200,39 @@ export default function POS() {
         </div>
         <Button variant="outline" className="w-full" onClick={stopScanner}>Cancel</Button>
       </div>
+      <Dialog open={!!pendingScan} onOpenChange={(o) => { if (!o) cancelPendingScan(); }}>
+        <DialogContent onClick={e => e.stopPropagation()} className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Confirm product</DialogTitle>
+            <DialogDescription>Set quantity and add to cart. Scanner stays open.</DialogDescription>
+          </DialogHeader>
+          {pendingScan && (
+            <div className="space-y-3">
+              <div className="rounded-lg border p-3">
+                <p className="font-semibold">{pendingScan.product.name}</p>
+                <p className="text-xs text-muted-foreground">{pendingScan.product.sku}</p>
+                <p className="font-bold mt-1">{formatNPR(pendingScan.product.selling_price)}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm">Qty</span>
+                <Button variant="outline" size="icon" onClick={() => setPendingScan(p => p ? { ...p, qty: Math.max(1, p.qty - 1) } : p)}>−</Button>
+                <Input
+                  type="number"
+                  min={1}
+                  value={pendingScan.qty}
+                  onChange={e => setPendingScan(p => p ? { ...p, qty: Math.max(1, parseInt(e.target.value) || 1) } : p)}
+                  className="text-center"
+                />
+                <Button variant="outline" size="icon" onClick={() => setPendingScan(p => p ? { ...p, qty: p.qty + 1 } : p)}>+</Button>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={cancelPendingScan}>Cancel</Button>
+            <Button onClick={confirmPendingScan}>Add to cart</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 
