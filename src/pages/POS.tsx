@@ -16,7 +16,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 import { barcodesMatch, normalizeBarcode } from "@/lib/barcode";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 
 type ProductRow = { id: string; name: string; sku: string | null; barcode: string | null; category_id: string | null; selling_price: number; status: string };
 type CategoryRow = { id: string; name: string };
@@ -27,10 +26,6 @@ export default function POS() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const productsRef = useRef<ProductRow[]>([]);
-  const pausedRef = useRef(false);
-  const lastScanRef = useRef<{ code: string; at: number } | null>(null);
-  const qtyInputRef = useRef<HTMLInputElement | null>(null);
-  const [pendingScan, setPendingScan] = useState<{ product: ProductRow; qty: number } | null>(null);
   const store = usePOSStore();
   const isMobile = useIsMobile();
   const { profile } = useAuth();
@@ -60,64 +55,21 @@ export default function POS() {
   };
 
   const handleScanned = (code: string) => {
-    if (pausedRef.current) return;
     const trimmed = normalizeBarcode(code);
-    // Debounce duplicate frames of the same code
-    const now = Date.now();
-    if (lastScanRef.current && lastScanRef.current.code === trimmed && now - lastScanRef.current.at < 1500) {
-      return;
-    }
-    lastScanRef.current = { code: trimmed, at: now };
     const list = productsRef.current;
     const match = list.find(p => barcodesMatch(p.barcode, trimmed))
       || list.find(p => (p.sku || '').trim().toLowerCase() === trimmed.toLowerCase());
     if (match) {
-      // Pause scanning and prompt for quantity confirmation
-      pausedRef.current = true;
-      try { scannerRef.current?.pause(true); } catch {}
-      setPendingScan({ product: match, qty: 1 });
-      // Focus quantity input on next frame for fast keyboard entry
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          qtyInputRef.current?.focus();
-          qtyInputRef.current?.select();
-        }, 50);
-      });
+      addProduct(match);
+      toast.success(`Added: ${match.name}`);
     } else {
+      setSearch(trimmed);
       toast.error(`No product matches "${trimmed}"`);
-      // Keep scanner open so user can try another code
     }
-  };
-
-  const resumeScanner = () => {
-    const s = scannerRef.current;
-    if (s) {
-      try { s.resume(); } catch {}
-    }
-    // Clear duplicate guard so the next (possibly same) barcode can register
-    lastScanRef.current = null;
-    pausedRef.current = false;
-  };
-
-  const confirmPendingScan = () => {
-    if (!pendingScan) return;
-    const { product, qty } = pendingScan;
-    const q = Math.max(1, Math.floor(qty || 1));
-    store.addItem({ product_id: product.id, name: product.name, price: product.selling_price, quantity: q, discount: 0, is_custom: false, notes: '' });
-    toast.success(`Added: ${product.name} × ${q}`);
-    setPendingScan(null);
-    resumeScanner();
-  };
-
-  const cancelPendingScan = () => {
-    setPendingScan(null);
-    resumeScanner();
+    stopScanner();
   };
 
   const stopScanner = async () => {
-    setPendingScan(null);
-    pausedRef.current = false;
-    lastScanRef.current = null;
     const s = scannerRef.current;
     scannerRef.current = null;
     if (s) {
@@ -145,38 +97,19 @@ export default function POS() {
           Html5QrcodeSupportedFormats.CODE_39,
           Html5QrcodeSupportedFormats.QR_CODE,
         ],
-        useBarCodeDetectorIfSupported: true,
-        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
         verbose: false,
       });
       scannerRef.current = scanner;
       const onSuccess = (text: string) => handleScanned(text);
       const onErr = () => {};
-      const config: any = {
-        fps: 24,
-        qrbox: (vw: number, vh: number) => {
-          const minEdge = Math.min(vw, vh);
-          const w = Math.floor(Math.min(vw * 0.9, 480));
-          const h = Math.floor(Math.min(minEdge * 0.55, 220));
-          return { width: w, height: h };
-        },
-        aspectRatio: 1.7777778,
-        disableFlip: false,
-        videoConstraints: {
-          facingMode: { ideal: "environment" },
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-          advanced: [{ focusMode: "continuous" } as any],
-        },
-      };
       try {
-        await scanner.start({ facingMode: "environment" }, config, onSuccess, onErr);
+        await scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 260, height: 160 } }, onSuccess, onErr);
       } catch (e1) {
         // Fallback: try first available camera
         const cams = await Html5Qrcode.getCameras();
         if (!cams || cams.length === 0) throw new Error("No camera found");
         const back = cams.find(c => /back|rear|environment/i.test(c.label)) || cams[cams.length - 1];
-        await scanner.start(back.id, config, onSuccess, onErr);
+        await scanner.start(back.id, { fps: 10, qrbox: { width: 260, height: 160 } }, onSuccess, onErr);
       }
     } catch (err: any) {
       const msg = err?.name === "NotAllowedError"
@@ -242,41 +175,6 @@ export default function POS() {
         </div>
         <Button variant="outline" className="w-full" onClick={stopScanner}>Cancel</Button>
       </div>
-      <Dialog open={!!pendingScan} onOpenChange={(o) => { if (!o) cancelPendingScan(); }}>
-        <DialogContent onClick={e => e.stopPropagation()} className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Confirm product</DialogTitle>
-            <DialogDescription>Set quantity and add to cart. Scanner stays open.</DialogDescription>
-          </DialogHeader>
-          {pendingScan && (
-            <div className="space-y-3">
-              <div className="rounded-lg border p-3">
-                <p className="font-semibold">{pendingScan.product.name}</p>
-                <p className="text-xs text-muted-foreground">{pendingScan.product.sku}</p>
-                <p className="font-bold mt-1">{formatNPR(pendingScan.product.selling_price)}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm">Qty</span>
-                <Button variant="outline" size="icon" onClick={() => setPendingScan(p => p ? { ...p, qty: Math.max(1, p.qty - 1) } : p)}>−</Button>
-                <Input
-                  ref={qtyInputRef}
-                  type="number"
-                  min={1}
-                  value={pendingScan.qty}
-                  onChange={e => setPendingScan(p => p ? { ...p, qty: Math.max(1, parseInt(e.target.value) || 1) } : p)}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); confirmPendingScan(); } }}
-                  className="text-center"
-                />
-                <Button variant="outline" size="icon" onClick={() => setPendingScan(p => p ? { ...p, qty: p.qty + 1 } : p)}>+</Button>
-              </div>
-            </div>
-          )}
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={cancelPendingScan}>Cancel</Button>
-            <Button onClick={confirmPendingScan}>Add to cart</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 
