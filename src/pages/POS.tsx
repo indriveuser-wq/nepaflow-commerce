@@ -16,6 +16,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 import { barcodesMatch, normalizeBarcode } from "@/lib/barcode";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 
 type ProductRow = { id: string; name: string; sku: string | null; barcode: string | null; category_id: string | null; selling_price: number; status: string };
 type CategoryRow = { id: string; name: string };
@@ -26,6 +27,7 @@ export default function POS() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const productsRef = useRef<ProductRow[]>([]);
+  const [pendingScan, setPendingScan] = useState<{ product: ProductRow; qty: number } | null>(null);
   const store = usePOSStore();
   const isMobile = useIsMobile();
   const { profile } = useAuth();
@@ -60,16 +62,39 @@ export default function POS() {
     const match = list.find(p => barcodesMatch(p.barcode, trimmed))
       || list.find(p => (p.sku || '').trim().toLowerCase() === trimmed.toLowerCase());
     if (match) {
-      addProduct(match);
-      toast.success(`Added: ${match.name}`);
+      // Pause scanning and prompt for quantity confirmation
+      try { scannerRef.current?.pause(true); } catch {}
+      setPendingScan({ product: match, qty: 1 });
     } else {
-      setSearch(trimmed);
       toast.error(`No product matches "${trimmed}"`);
+      // Keep scanner open so user can try another code
     }
-    stopScanner();
+  };
+
+  const resumeScanner = () => {
+    const s = scannerRef.current;
+    if (s) {
+      try { s.resume(); } catch {}
+    }
+  };
+
+  const confirmPendingScan = () => {
+    if (!pendingScan) return;
+    const { product, qty } = pendingScan;
+    const q = Math.max(1, Math.floor(qty || 1));
+    store.addItem({ product_id: product.id, name: product.name, price: product.selling_price, quantity: q, discount: 0, is_custom: false, notes: '' });
+    toast.success(`Added: ${product.name} × ${q}`);
+    setPendingScan(null);
+    resumeScanner();
+  };
+
+  const cancelPendingScan = () => {
+    setPendingScan(null);
+    resumeScanner();
   };
 
   const stopScanner = async () => {
+    setPendingScan(null);
     const s = scannerRef.current;
     scannerRef.current = null;
     if (s) {
@@ -175,6 +200,39 @@ export default function POS() {
         </div>
         <Button variant="outline" className="w-full" onClick={stopScanner}>Cancel</Button>
       </div>
+      <Dialog open={!!pendingScan} onOpenChange={(o) => { if (!o) cancelPendingScan(); }}>
+        <DialogContent onClick={e => e.stopPropagation()} className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Confirm product</DialogTitle>
+            <DialogDescription>Set quantity and add to cart. Scanner stays open.</DialogDescription>
+          </DialogHeader>
+          {pendingScan && (
+            <div className="space-y-3">
+              <div className="rounded-lg border p-3">
+                <p className="font-semibold">{pendingScan.product.name}</p>
+                <p className="text-xs text-muted-foreground">{pendingScan.product.sku}</p>
+                <p className="font-bold mt-1">{formatNPR(pendingScan.product.selling_price)}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm">Qty</span>
+                <Button variant="outline" size="icon" onClick={() => setPendingScan(p => p ? { ...p, qty: Math.max(1, p.qty - 1) } : p)}>−</Button>
+                <Input
+                  type="number"
+                  min={1}
+                  value={pendingScan.qty}
+                  onChange={e => setPendingScan(p => p ? { ...p, qty: Math.max(1, parseInt(e.target.value) || 1) } : p)}
+                  className="text-center"
+                />
+                <Button variant="outline" size="icon" onClick={() => setPendingScan(p => p ? { ...p, qty: p.qty + 1 } : p)}>+</Button>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={cancelPendingScan}>Cancel</Button>
+            <Button onClick={confirmPendingScan}>Add to cart</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 
