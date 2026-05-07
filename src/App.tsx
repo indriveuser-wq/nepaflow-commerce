@@ -16,6 +16,7 @@ import Inventory from "./pages/Inventory";
 import Orders from "./pages/Orders";
 import OrderDetail from "./pages/OrderDetail";
 import POS from "./pages/POS";
+import POSScannerTest from "./pages/POSScannerTest";
 import Customers from "./pages/Customers";
 import CustomerDetail from "./pages/CustomerDetail";
 import Payments from "./pages/Payments";
@@ -59,6 +60,7 @@ const App = () => (
             <Route path="/orders/new" element={<P roles={['admin', 'manager', 'cashier']}><NewOrder /></P>} />
             <Route path="/orders/:id" element={<P><OrderDetail /></P>} />
             <Route path="/pos" element={<P><POS /></P>} />
+            <Route path="/pos/test" element={<P><POSScannerTest /></P>} />
             <Route path="/customers" element={<P><Customers /></P>} />
             <Route path="/customers/:id" element={<P><CustomerDetail /></P>} />
             <Route path="/payments" element={<P roles={['admin', 'manager']}><Payments /></P>} />
