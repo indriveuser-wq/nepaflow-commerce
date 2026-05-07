@@ -145,19 +145,38 @@ export default function POS() {
           Html5QrcodeSupportedFormats.CODE_39,
           Html5QrcodeSupportedFormats.QR_CODE,
         ],
+        useBarCodeDetectorIfSupported: true,
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
         verbose: false,
       });
       scannerRef.current = scanner;
       const onSuccess = (text: string) => handleScanned(text);
       const onErr = () => {};
+      const config: any = {
+        fps: 24,
+        qrbox: (vw: number, vh: number) => {
+          const minEdge = Math.min(vw, vh);
+          const w = Math.floor(Math.min(vw * 0.9, 480));
+          const h = Math.floor(Math.min(minEdge * 0.55, 220));
+          return { width: w, height: h };
+        },
+        aspectRatio: 1.7777778,
+        disableFlip: false,
+        videoConstraints: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          advanced: [{ focusMode: "continuous" } as any],
+        },
+      };
       try {
-        await scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 260, height: 160 } }, onSuccess, onErr);
+        await scanner.start({ facingMode: "environment" }, config, onSuccess, onErr);
       } catch (e1) {
         // Fallback: try first available camera
         const cams = await Html5Qrcode.getCameras();
         if (!cams || cams.length === 0) throw new Error("No camera found");
         const back = cams.find(c => /back|rear|environment/i.test(c.label)) || cams[cams.length - 1];
-        await scanner.start(back.id, { fps: 10, qrbox: { width: 260, height: 160 } }, onSuccess, onErr);
+        await scanner.start(back.id, config, onSuccess, onErr);
       }
     } catch (err: any) {
       const msg = err?.name === "NotAllowedError"
