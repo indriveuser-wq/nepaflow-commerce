@@ -277,11 +277,18 @@ export default function POS() {
           <div className="flex items-center gap-2 font-display font-bold">
             <ScanBarcode className="h-5 w-5" /> Scan Barcode
           </div>
-          <Button variant="ghost" size="icon" onClick={stopScanner}><X className="h-4 w-4" /></Button>
+          <div className="flex items-center gap-1">
+            {torchSupported && (
+              <Button variant={torchOn ? "secondary" : "ghost"} size="icon" onClick={toggleTorch} title={torchOn ? "Turn flash off" : "Turn flash on"}>
+                {torchOn ? <FlashlightOff className="h-4 w-4" /> : <Flashlight className="h-4 w-4" />}
+              </Button>
+            )}
+            <Button variant="ghost" size="icon" onClick={stopScanner}><X className="h-4 w-4" /></Button>
+          </div>
         </div>
         <p className="text-xs text-muted-foreground">Point your rear camera at a barcode or QR code.</p>
         <div className="relative w-full overflow-hidden rounded-lg bg-black aspect-video">
-          <div id="pos-barcode-scanner-region" className="w-full h-full [&_video]:w-full [&_video]:h-full [&_video]:object-cover" />
+          <div id="pos-barcode-scanner-region" className="w-full h-full [&_video]:w-full [&_video]:h-full [&_video]:object-contain" />
         </div>
         <Button variant="outline" className="w-full" onClick={stopScanner}>Cancel</Button>
       </div>
