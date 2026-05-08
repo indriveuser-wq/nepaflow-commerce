@@ -196,26 +196,10 @@ export default function POS() {
       const onSuccess = (text: string) => handleScanned(text);
       const onErr = () => {};
       const preferredCameraId = await getPreferredRearCameraId();
-      const scanConfig = {
-        fps: 20,
-        qrbox: (vw: number, vh: number) => {
-          const minEdge = Math.min(vw, vh);
-          const width = Math.floor(minEdge * 0.9);
-          return { width, height: Math.floor(width * 0.45) };
-        },
-        aspectRatio: 1.7777,
-        disableFlip: true,
-        videoConstraints: {
-          facingMode: { ideal: "environment" },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          frameRate: { ideal: 30, max: 30 },
-        } as MediaTrackConstraints,
-      };
       try {
         await scanner.start(
           preferredCameraId || { facingMode: { ideal: "environment" } },
-          scanConfig,
+          createBarcodeScanConfig(preferredCameraId),
           onSuccess,
           onErr
         );
@@ -227,7 +211,7 @@ export default function POS() {
         const back = cams.find(c => /main|back|rear|environment/i.test(c.label) && !/ultra|wide|macro|front|selfie/i.test(c.label))
           || cams.find(c => /back|rear|environment/i.test(c.label))
           || cams[cams.length - 1];
-        await scanner.start(back.id, scanConfig, onSuccess, onErr);
+        await scanner.start(back.id, createBarcodeScanConfig(back.id), onSuccess, onErr);
         await improveCameraForBarcode(scanner);
       }
     } catch (err: any) {
