@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, ShoppingBag, ShoppingCart, ScanBarcode, X } from "lucide-react";
+import { Flashlight, FlashlightOff, Search, ShoppingBag, ShoppingCart, ScanBarcode, X } from "lucide-react";
 import { formatNPR } from "@/lib/formatters";
 import { usePOSStore } from "@/stores/pos-store";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -21,10 +21,47 @@ import { createPortal } from "react-dom";
 type ProductRow = { id: string; name: string; sku: string | null; barcode: string | null; category_id: string | null; selling_price: number; status: string };
 type CategoryRow = { id: string; name: string };
 
+type ScannerCapabilities = MediaTrackCapabilities & {
+  torch?: boolean;
+  zoom?: { min: number; max: number; step?: number };
+  focusMode?: string[];
+  exposureMode?: string[];
+  whiteBalanceMode?: string[];
+};
+
+type ScannerConstraint = MediaTrackConstraintSet & {
+  torch?: boolean;
+  zoom?: number;
+  focusMode?: string;
+  exposureMode?: string;
+  whiteBalanceMode?: string;
+};
+
+const getPreferredRearCameraId = async () => {
+  try {
+    const cameras = await Html5Qrcode.getCameras();
+    const labelledRearCameras = cameras
+      .filter(camera => /back|rear|environment|world/i.test(camera.label || ""))
+      .map(camera => {
+        const label = camera.label || "";
+        let score = 0;
+        if (/main|back|rear|environment|world/i.test(label)) score += 20;
+        if (/ultra|wide|macro|depth|front|user|selfie/i.test(label)) score -= 30;
+        return { id: camera.id, score };
+      })
+      .sort((a, b) => b.score - a.score);
+    return labelledRearCameras[0]?.id ?? null;
+  } catch {
+    return null;
+  }
+};
+
 export default function POS() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const productsRef = useRef<ProductRow[]>([]);
   const store = usePOSStore();
