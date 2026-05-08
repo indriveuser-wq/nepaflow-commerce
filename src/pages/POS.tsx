@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, ShoppingBag, ShoppingCart, ScanBarcode, X } from "lucide-react";
+import { Flashlight, FlashlightOff, Search, ShoppingBag, ShoppingCart, ScanBarcode, X } from "lucide-react";
 import { formatNPR } from "@/lib/formatters";
 import { usePOSStore } from "@/stores/pos-store";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -21,10 +21,64 @@ import { createPortal } from "react-dom";
 type ProductRow = { id: string; name: string; sku: string | null; barcode: string | null; category_id: string | null; selling_price: number; status: string };
 type CategoryRow = { id: string; name: string };
 
+type ScannerCapabilities = MediaTrackCapabilities & {
+  torch?: boolean;
+  zoom?: { min: number; max: number; step?: number };
+  focusMode?: string[];
+  exposureMode?: string[];
+  whiteBalanceMode?: string[];
+};
+
+type ScannerConstraint = MediaTrackConstraintSet & {
+  torch?: boolean;
+  zoom?: number;
+  focusMode?: string;
+  exposureMode?: string;
+  whiteBalanceMode?: string;
+};
+
+const createBarcodeScanConfig = (cameraId?: string | null) => ({
+  fps: 20,
+  qrbox: (vw: number, vh: number) => {
+    const minEdge = Math.min(vw, vh);
+    const width = Math.floor(minEdge * 0.9);
+    return { width, height: Math.floor(width * 0.45) };
+  },
+  aspectRatio: 1.7777,
+  disableFlip: true,
+  videoConstraints: {
+    ...(cameraId ? { deviceId: { exact: cameraId } } : { facingMode: { ideal: "environment" } }),
+    width: { ideal: 1280 },
+    height: { ideal: 720 },
+    frameRate: { ideal: 30, max: 30 },
+  } as MediaTrackConstraints,
+});
+
+const getPreferredRearCameraId = async () => {
+  try {
+    const cameras = await Html5Qrcode.getCameras();
+    const labelledRearCameras = cameras
+      .filter(camera => /back|rear|environment|world/i.test(camera.label || ""))
+      .map(camera => {
+        const label = camera.label || "";
+        let score = 0;
+        if (/main|back|rear|environment|world/i.test(label)) score += 20;
+        if (/ultra|wide|macro|depth|front|user|selfie/i.test(label)) score -= 30;
+        return { id: camera.id, score };
+      })
+      .sort((a, b) => b.score - a.score);
+    return labelledRearCameras[0]?.id ?? null;
+  } catch {
+    return null;
+  }
+};
+
 export default function POS() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const productsRef = useRef<ProductRow[]>([]);
   const store = usePOSStore();
@@ -73,15 +127,53 @@ export default function POS() {
   const stopScanner = async () => {
     const s = scannerRef.current;
     scannerRef.current = null;
+    setTorchSupported(false);
+    setTorchOn(false);
     if (s) {
-      try { if (s.isScanning) await s.stop(); } catch {}
-      try { await s.clear(); } catch {}
+      try { if (s.isScanning) await s.applyVideoConstraints({ advanced: [{ torch: false } as ScannerConstraint] }); } catch { /* ignore torch shutdown errors */ }
+      try { if (s.isScanning) await s.stop(); } catch { /* ignore scanner stop errors */ }
+      try { await s.clear(); } catch { /* ignore scanner cleanup errors */ }
     }
     setScannerOpen(false);
   };
 
+  const improveCameraForBarcode = async (scanner: Html5Qrcode) => {
+    try {
+      const capabilities = scanner.getRunningTrackCapabilities() as ScannerCapabilities;
+      const advanced: ScannerConstraint[] = [];
+      if (capabilities.focusMode?.includes("continuous")) advanced.push({ focusMode: "continuous" });
+      else if (capabilities.focusMode?.includes("auto")) advanced.push({ focusMode: "auto" });
+      if (capabilities.exposureMode?.includes("continuous")) advanced.push({ exposureMode: "continuous" });
+      if (capabilities.whiteBalanceMode?.includes("continuous")) advanced.push({ whiteBalanceMode: "continuous" });
+      if (capabilities.zoom && capabilities.zoom.min < capabilities.zoom.max) {
+        const zoom = Math.min(capabilities.zoom.max, Math.max(capabilities.zoom.min, 2));
+        advanced.push({ zoom });
+      }
+      setTorchSupported(Boolean(capabilities.torch));
+      if (advanced.length) await scanner.applyVideoConstraints({ advanced });
+    } catch {
+      setTorchSupported(false);
+    }
+  };
+
+  const toggleTorch = async () => {
+    const scanner = scannerRef.current;
+    if (!scanner?.isScanning) return;
+    const next = !torchOn;
+    try {
+      await scanner.applyVideoConstraints({ advanced: [{ torch: next } as ScannerConstraint] });
+      setTorchOn(next);
+    } catch {
+      toast.error("Flash is not supported on this phone/browser.");
+      setTorchSupported(false);
+      setTorchOn(false);
+    }
+  };
+
   const startScanner = async () => {
     // Open the modal first so the region div exists
+    setTorchSupported(false);
+    setTorchOn(false);
     setScannerOpen(true);
     // Wait one frame for region to mount
     await new Promise(r => requestAnimationFrame(() => r(null)));
@@ -103,41 +195,30 @@ export default function POS() {
       scannerRef.current = scanner;
       const onSuccess = (text: string) => handleScanned(text);
       const onErr = () => {};
+      const preferredCameraId = await getPreferredRearCameraId();
       try {
         await scanner.start(
-          { facingMode: { ideal: "environment" } },
-          {
-            fps: 15,
-            qrbox: (vw, vh) => {
-              const minEdge = Math.min(vw, vh);
-              const w = Math.floor(minEdge * 0.85);
-              return { width: w, height: Math.floor(w * 0.6) };
-            },
-            aspectRatio: 1.7777,
-            videoConstraints: {
-              facingMode: { ideal: "environment" },
-              width: { ideal: 1920 },
-              height: { ideal: 1080 },
-              // @ts-ignore - non-standard but supported on many mobile browsers
-              focusMode: "continuous",
-              // @ts-ignore
-              advanced: [{ focusMode: "continuous" }, { focusMode: "auto" }],
-            } as MediaTrackConstraints,
-          },
+          preferredCameraId || { facingMode: { ideal: "environment" } },
+          createBarcodeScanConfig(preferredCameraId),
           onSuccess,
           onErr
         );
+        await improveCameraForBarcode(scanner);
       } catch (e1) {
         // Fallback: try first available camera
         const cams = await Html5Qrcode.getCameras();
         if (!cams || cams.length === 0) throw new Error("No camera found");
-        const back = cams.find(c => /back|rear|environment/i.test(c.label)) || cams[cams.length - 1];
-        await scanner.start(back.id, { fps: 15, qrbox: { width: 280, height: 170 } }, onSuccess, onErr);
+        const back = cams.find(c => /main|back|rear|environment/i.test(c.label) && !/ultra|wide|macro|front|selfie/i.test(c.label))
+          || cams.find(c => /back|rear|environment/i.test(c.label))
+          || cams[cams.length - 1];
+        await scanner.start(back.id, createBarcodeScanConfig(back.id), onSuccess, onErr);
+        await improveCameraForBarcode(scanner);
       }
-    } catch (err: any) {
-      const msg = err?.name === "NotAllowedError"
+    } catch (err: unknown) {
+      const error = err as { name?: string; message?: string };
+      const msg = error?.name === "NotAllowedError"
         ? "Camera permission denied. Allow camera access in browser settings."
-        : err?.message || "Unable to access camera";
+        : error?.message || "Unable to access camera";
       toast.error(msg);
       stopScanner();
     }
@@ -198,11 +279,18 @@ export default function POS() {
           <div className="flex items-center gap-2 font-display font-bold">
             <ScanBarcode className="h-5 w-5" /> Scan Barcode
           </div>
-          <Button variant="ghost" size="icon" onClick={stopScanner}><X className="h-4 w-4" /></Button>
+          <div className="flex items-center gap-1">
+            {torchSupported && (
+              <Button variant={torchOn ? "secondary" : "ghost"} size="icon" onClick={toggleTorch} title={torchOn ? "Turn flash off" : "Turn flash on"}>
+                {torchOn ? <FlashlightOff className="h-4 w-4" /> : <Flashlight className="h-4 w-4" />}
+              </Button>
+            )}
+            <Button variant="ghost" size="icon" onClick={stopScanner}><X className="h-4 w-4" /></Button>
+          </div>
         </div>
         <p className="text-xs text-muted-foreground">Point your rear camera at a barcode or QR code.</p>
         <div className="relative w-full overflow-hidden rounded-lg bg-black aspect-video">
-          <div id="pos-barcode-scanner-region" className="w-full h-full [&_video]:w-full [&_video]:h-full [&_video]:object-cover" />
+          <div id="pos-barcode-scanner-region" className="w-full h-full [&_video]:w-full [&_video]:h-full [&_video]:object-contain" />
         </div>
         <Button variant="outline" className="w-full" onClick={stopScanner}>Cancel</Button>
       </div>
