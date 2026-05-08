@@ -130,9 +130,9 @@ export default function POS() {
     setTorchSupported(false);
     setTorchOn(false);
     if (s) {
-      try { if (s.isScanning) await s.applyVideoConstraints({ advanced: [{ torch: false } as ScannerConstraint] }); } catch {}
-      try { if (s.isScanning) await s.stop(); } catch {}
-      try { await s.clear(); } catch {}
+      try { if (s.isScanning) await s.applyVideoConstraints({ advanced: [{ torch: false } as ScannerConstraint] }); } catch { /* ignore torch shutdown errors */ }
+      try { if (s.isScanning) await s.stop(); } catch { /* ignore scanner stop errors */ }
+      try { await s.clear(); } catch { /* ignore scanner cleanup errors */ }
     }
     setScannerOpen(false);
   };
@@ -214,10 +214,11 @@ export default function POS() {
         await scanner.start(back.id, createBarcodeScanConfig(back.id), onSuccess, onErr);
         await improveCameraForBarcode(scanner);
       }
-    } catch (err: any) {
-      const msg = err?.name === "NotAllowedError"
+    } catch (err: unknown) {
+      const error = err as { name?: string; message?: string };
+      const msg = error?.name === "NotAllowedError"
         ? "Camera permission denied. Allow camera access in browser settings."
-        : err?.message || "Unable to access camera";
+        : error?.message || "Unable to access camera";
       toast.error(msg);
       stopScanner();
     }
