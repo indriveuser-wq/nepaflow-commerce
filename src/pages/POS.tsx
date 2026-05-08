@@ -16,6 +16,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 import { barcodesMatch, normalizeBarcode } from "@/lib/barcode";
+import { createPortal } from "react-dom";
 
 type ProductRow = { id: string; name: string; sku: string | null; barcode: string | null; category_id: string | null; selling_price: number; status: string };
 type CategoryRow = { id: string; name: string };
@@ -103,13 +104,35 @@ export default function POS() {
       const onSuccess = (text: string) => handleScanned(text);
       const onErr = () => {};
       try {
-        await scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 260, height: 160 } }, onSuccess, onErr);
+        await scanner.start(
+          { facingMode: { ideal: "environment" } },
+          {
+            fps: 15,
+            qrbox: (vw, vh) => {
+              const minEdge = Math.min(vw, vh);
+              const w = Math.floor(minEdge * 0.85);
+              return { width: w, height: Math.floor(w * 0.6) };
+            },
+            aspectRatio: 1.7777,
+            videoConstraints: {
+              facingMode: { ideal: "environment" },
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
+              // @ts-ignore - non-standard but supported on many mobile browsers
+              focusMode: "continuous",
+              // @ts-ignore
+              advanced: [{ focusMode: "continuous" }, { focusMode: "auto" }],
+            } as MediaTrackConstraints,
+          },
+          onSuccess,
+          onErr
+        );
       } catch (e1) {
         // Fallback: try first available camera
         const cams = await Html5Qrcode.getCameras();
         if (!cams || cams.length === 0) throw new Error("No camera found");
         const back = cams.find(c => /back|rear|environment/i.test(c.label)) || cams[cams.length - 1];
-        await scanner.start(back.id, { fps: 10, qrbox: { width: 260, height: 160 } }, onSuccess, onErr);
+        await scanner.start(back.id, { fps: 15, qrbox: { width: 280, height: 170 } }, onSuccess, onErr);
       }
     } catch (err: any) {
       const msg = err?.name === "NotAllowedError"
@@ -160,9 +183,17 @@ export default function POS() {
     </div>
   );
 
-  const scannerOverlay = scannerOpen && (
-    <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4" onClick={stopScanner}>
-      <div className="w-full max-w-md bg-card rounded-xl p-4 space-y-3" onClick={e => e.stopPropagation()}>
+  const scannerOverlay = scannerOpen && createPortal(
+    <div
+      className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-4"
+      style={{ pointerEvents: "auto" }}
+      onClick={stopScanner}
+    >
+      <div
+        className="w-full max-w-md bg-card rounded-xl p-4 space-y-3"
+        style={{ pointerEvents: "auto" }}
+        onClick={e => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 font-display font-bold">
             <ScanBarcode className="h-5 w-5" /> Scan Barcode
@@ -175,7 +206,8 @@ export default function POS() {
         </div>
         <Button variant="outline" className="w-full" onClick={stopScanner}>Cancel</Button>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 
   if (isMobile) {
