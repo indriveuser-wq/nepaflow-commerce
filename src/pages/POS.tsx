@@ -48,9 +48,11 @@ const createBarcodeScanConfig = (cameraId?: string | null) => ({
   disableFlip: true,
   videoConstraints: {
     ...(cameraId ? { deviceId: { exact: cameraId } } : { facingMode: { ideal: "environment" } }),
-    width: { ideal: 1280 },
-    height: { ideal: 720 },
-    frameRate: { ideal: 30, max: 30 },
+    width: { ideal: 1920 },
+    height: { ideal: 1080 },
+    frameRate: { ideal: 30, max: 60 },
+    // @ts-expect-error - non-standard but supported on some mobile browsers
+    focusMode: "continuous",
   } as MediaTrackConstraints,
 });
 
@@ -289,8 +291,11 @@ export default function POS() {
           </div>
         </div>
         <p className="text-xs text-muted-foreground">Point your rear camera at a barcode or QR code.</p>
-        <div className="relative w-full overflow-hidden rounded-lg bg-black aspect-video">
-          <div id="pos-barcode-scanner-region" className="w-full h-full [&_video]:w-full [&_video]:h-full [&_video]:object-contain" />
+        <div className="relative w-full overflow-hidden rounded-lg bg-black aspect-[3/4] sm:aspect-video">
+          <div
+            id="pos-barcode-scanner-region"
+            className="w-full h-full [&_video]:w-full [&_video]:h-full [&_video]:object-cover [&_video]:filter-none"
+          />
         </div>
         <Button variant="outline" className="w-full" onClick={stopScanner}>Cancel</Button>
       </div>
