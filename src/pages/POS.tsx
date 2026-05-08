@@ -37,6 +37,23 @@ type ScannerConstraint = MediaTrackConstraintSet & {
   whiteBalanceMode?: string;
 };
 
+const createBarcodeScanConfig = (cameraId?: string | null) => ({
+  fps: 20,
+  qrbox: (vw: number, vh: number) => {
+    const minEdge = Math.min(vw, vh);
+    const width = Math.floor(minEdge * 0.9);
+    return { width, height: Math.floor(width * 0.45) };
+  },
+  aspectRatio: 1.7777,
+  disableFlip: true,
+  videoConstraints: {
+    ...(cameraId ? { deviceId: { exact: cameraId } } : { facingMode: { ideal: "environment" } }),
+    width: { ideal: 1280 },
+    height: { ideal: 720 },
+    frameRate: { ideal: 30, max: 30 },
+  } as MediaTrackConstraints,
+});
+
 const getPreferredRearCameraId = async () => {
   try {
     const cameras = await Html5Qrcode.getCameras();
