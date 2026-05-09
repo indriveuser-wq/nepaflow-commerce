@@ -337,7 +337,13 @@ export default function POS() {
       };
       const onErr = () => {};
       const devices = await getVideoInputDevices();
-      const cameraOptions = buildCameraStartOptions(devices);
+      console.info("Available POS barcode scanner video inputs", devices.map((device, index) => ({
+        index,
+        label: device.label || `Camera ${index + 1}`,
+        deviceId: device.deviceId,
+      })));
+      let cameraOptions = buildCameraStartOptions(devices);
+      const triedDeviceIds = new Set<string>();
       let lastError: unknown = null;
 
       for (let index = 0; index < cameraOptions.length; index += 1) {
@@ -354,11 +360,21 @@ export default function POS() {
             avoid: option.avoid,
             deviceCount: devices.length,
           });
+          if (option.deviceId) triedDeviceIds.add(option.deviceId);
 
           await scanner.start(startSource, config, onSuccess, onErr);
+          try { scanner.pause(false); } catch { /* ignore pause errors while preparing video */ }
           await improveCameraForBarcode(scanner);
           const video = await waitForScannerVideoReady();
           const lowResolution = hasLowActualResolution(video.videoWidth, video.videoHeight);
+          if (lowResolution) {
+            const refreshedDevices = await getVideoInputDevices();
+            const newlyLabelledRearCameras = buildCameraStartOptions(refreshedDevices)
+              .filter(next => next.deviceId && next.isRear && !next.avoid && !triedDeviceIds.has(next.deviceId));
+            if (newlyLabelledRearCameras.length > 0) {
+              cameraOptions = [...cameraOptions, ...newlyLabelledRearCameras];
+            }
+          }
           const hasAnotherRearCamera = cameraOptions.slice(index + 1).some(next => next.isRear && !next.avoid && next.deviceId !== option.deviceId);
 
           if (lowResolution && hasAnotherRearCamera) {
@@ -371,6 +387,7 @@ export default function POS() {
           }
 
           scannerReadyRef.current = true;
+          try { scanner.resume(); } catch { /* ignore resume errors if scanner is already active */ }
           return;
         } catch (error) {
           lastError = error;
