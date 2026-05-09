@@ -37,42 +37,173 @@ type ScannerConstraint = MediaTrackConstraintSet & {
   whiteBalanceMode?: string;
 };
 
+type ScannerMediaConstraints = MediaTrackConstraints & {
+  focusMode?: string;
+  resizeMode?: string;
+};
+
+type CameraStartOption = {
+  id: string;
+  label: string;
+  source: string | MediaTrackConstraints;
+  deviceId?: string | null;
+  isRear: boolean;
+  avoid: boolean;
+  score: number;
+};
+
+const SCANNER_REGION_ID = "pos-barcode-scanner-region";
+const MIN_ACCEPTABLE_VIDEO_WIDTH = 1280;
+const MIN_ACCEPTABLE_VIDEO_HEIGHT = 720;
+
+const createHighQualityVideoConstraints = (cameraId?: string | null): ScannerMediaConstraints => ({
+  ...(cameraId ? { deviceId: { exact: cameraId } } : { facingMode: { ideal: "environment" } }),
+  width: { ideal: 1920 },
+  height: { ideal: 1080 },
+  frameRate: { ideal: 30 },
+  resizeMode: "none",
+  focusMode: "continuous",
+});
+
 const createBarcodeScanConfig = (cameraId?: string | null) => ({
   fps: 20,
   qrbox: (vw: number, vh: number) => {
     const minEdge = Math.min(vw, vh);
-    const width = Math.floor(minEdge * 0.9);
-    return { width, height: Math.floor(width * 0.45) };
+    const isSmallViewport = minEdge < 520;
+    const width = Math.floor(minEdge * (isSmallViewport ? 0.96 : 0.9));
+    return { width, height: Math.floor(width * (isSmallViewport ? 0.62 : 0.45)) };
   },
   aspectRatio: 1.7777,
   disableFlip: true,
-  videoConstraints: {
-    ...(cameraId ? { deviceId: { exact: cameraId } } : { facingMode: { ideal: "environment" } }),
-    width: { ideal: 1920 },
-    height: { ideal: 1080 },
-    frameRate: { ideal: 30, max: 60 },
-    // @ts-expect-error - non-standard but supported on some mobile browsers
-    focusMode: "continuous",
-  } as MediaTrackConstraints,
+  videoConstraints: createHighQualityVideoConstraints(cameraId),
 });
 
-const getPreferredRearCameraId = async () => {
-  try {
-    const cameras = await Html5Qrcode.getCameras();
-    const labelledRearCameras = cameras
-      .filter(camera => /back|rear|environment|world/i.test(camera.label || ""))
-      .map(camera => {
-        const label = camera.label || "";
-        let score = 0;
-        if (/main|back|rear|environment|world/i.test(label)) score += 20;
-        if (/ultra|wide|macro|depth|front|user|selfie/i.test(label)) score -= 30;
-        return { id: camera.id, score };
-      })
-      .sort((a, b) => b.score - a.score);
-    return labelledRearCameras[0]?.id ?? null;
-  } catch {
-    return null;
-  }
+const getVideoInputDevices = async () => {
+  if (!navigator.mediaDevices?.enumerateDevices) return [];
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  return devices.filter(device => device.kind === "videoinput");
+};
+
+const buildCameraStartOptions = (devices: MediaDeviceInfo[]): CameraStartOption[] => {
+  const scoredDevices = devices.map((device, index) => {
+    const label = device.label || `Camera ${index + 1}`;
+    const isRear = /back|rear|environment|world|main/i.test(label);
+    const isFront = /front|user|selfie|facetime/i.test(label);
+    const avoid = /ultra|wide|macro|depth|virtual/i.test(label);
+    const isUnlabeled = !device.label;
+    let score = 0;
+    if (isRear) score += 60;
+    if (/main/i.test(label)) score += 20;
+    if (isFront) score -= 60;
+    if (avoid) score -= 120;
+    if (isUnlabeled) score -= index;
+    return { device, label, isRear, avoid, score };
+  });
+
+  const sortedDevices = [...scoredDevices].sort((a, b) => b.score - a.score);
+  const rearOptions = sortedDevices
+    .filter(({ isRear, avoid }) => isRear && !avoid)
+    .map(({ device, label, isRear, avoid, score }) => ({
+      id: device.deviceId,
+      label,
+      source: device.deviceId,
+      deviceId: device.deviceId,
+      isRear,
+      avoid,
+      score,
+    }));
+
+  const environmentFallback: CameraStartOption = {
+    id: "environment-fallback",
+    label: "Environment camera",
+    source: createHighQualityVideoConstraints(),
+    deviceId: null,
+    isRear: true,
+    avoid: false,
+    score: 30,
+  };
+
+  const deviceOptions = sortedDevices
+    .filter(({ avoid }) => !avoid)
+    .map(({ device, label, isRear, avoid, score }) => ({
+      id: device.deviceId,
+      label,
+      source: device.deviceId,
+      deviceId: device.deviceId,
+      isRear,
+      avoid,
+      score,
+    }));
+
+  const hasUsefulLabels = sortedDevices.some(({ device }) => Boolean(device.label));
+  const queue = rearOptions.length > 0
+    ? [...rearOptions, ...deviceOptions, environmentFallback]
+    : hasUsefulLabels
+      ? [...deviceOptions, environmentFallback]
+      : [environmentFallback, ...deviceOptions];
+
+  return queue.filter((option, index, all) => option.id && all.findIndex(item => item.id === option.id) === index);
+};
+
+const getScannerVideoElement = () => (
+  document.querySelector(`#${SCANNER_REGION_ID} video`) as HTMLVideoElement | null
+);
+
+const prepareScannerVideoElement = (video: HTMLVideoElement) => {
+  video.setAttribute("playsinline", "true");
+  video.setAttribute("autoplay", "true");
+  video.setAttribute("muted", "true");
+  video.playsInline = true;
+  video.autoplay = true;
+  video.muted = true;
+  video.style.objectFit = "cover";
+  video.style.transform = "none";
+  video.style.filter = "none";
+};
+
+const waitForScannerVideoReady = async (timeoutMs = 3000): Promise<HTMLVideoElement> => {
+  const startedAt = Date.now();
+  return new Promise((resolve, reject) => {
+    const tick = () => {
+      const video = getScannerVideoElement();
+      if (video) {
+        prepareScannerVideoElement(video);
+        if (video.readyState >= HTMLMediaElement.HAVE_METADATA && video.videoWidth > 0 && video.videoHeight > 0) {
+          resolve(video);
+          return;
+        }
+      }
+      if (Date.now() - startedAt > timeoutMs) {
+        reject(new Error("Camera preview did not become ready. Try the manual barcode field."));
+        return;
+      }
+      requestAnimationFrame(tick);
+    };
+    tick();
+  });
+};
+
+const stopRegionVideoTracks = () => {
+  document.querySelectorAll<HTMLVideoElement>(`#${SCANNER_REGION_ID} video`).forEach(video => {
+    const stream = video.srcObject;
+    if (stream instanceof MediaStream) {
+      stream.getTracks().forEach(track => track.stop());
+      video.srcObject = null;
+    }
+  });
+};
+
+const hasLowActualResolution = (width?: number, height?: number) => {
+  if (!width || !height) return true;
+  return Math.max(width, height) < MIN_ACCEPTABLE_VIDEO_WIDTH || Math.min(width, height) < MIN_ACCEPTABLE_VIDEO_HEIGHT;
+};
+
+const shouldAvoidCameraLabel = (label?: string | null) => /ultra|wide|macro|depth|virtual/i.test(label || "");
+
+const getActiveVideoTrackLabel = (video: HTMLVideoElement) => {
+  const stream = video.srcObject;
+  if (!(stream instanceof MediaStream)) return "";
+  return stream.getVideoTracks()[0]?.label || "";
 };
 
 export default function POS() {
@@ -81,7 +212,9 @@ export default function POS() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
+  const [manualBarcode, setManualBarcode] = useState("");
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const scannerReadyRef = useRef(false);
   const productsRef = useRef<ProductRow[]>([]);
   const store = usePOSStore();
   const isMobile = useIsMobile();
@@ -129,6 +262,7 @@ export default function POS() {
   const stopScanner = async () => {
     const s = scannerRef.current;
     scannerRef.current = null;
+    scannerReadyRef.current = false;
     setTorchSupported(false);
     setTorchOn(false);
     if (s) {
@@ -136,6 +270,7 @@ export default function POS() {
       try { if (s.isScanning) await s.stop(); } catch { /* ignore scanner stop errors */ }
       try { await s.clear(); } catch { /* ignore scanner cleanup errors */ }
     }
+    stopRegionVideoTracks();
     setScannerOpen(false);
   };
 
@@ -172,17 +307,28 @@ export default function POS() {
     }
   };
 
+  const submitManualBarcode = () => {
+    const value = normalizeBarcode(manualBarcode);
+    if (!value) {
+      toast.error("Enter a barcode first.");
+      return;
+    }
+    setManualBarcode("");
+    handleScanned(value);
+  };
+
   const startScanner = async () => {
     // Open the modal first so the region div exists
     setTorchSupported(false);
     setTorchOn(false);
+    scannerReadyRef.current = false;
     setScannerOpen(true);
     // Wait one frame for region to mount
     await new Promise(r => requestAnimationFrame(() => r(null)));
-    const region = document.getElementById("pos-barcode-scanner-region");
+    const region = document.getElementById(SCANNER_REGION_ID);
     if (!region) { toast.error("Scanner region missing"); setScannerOpen(false); return; }
     try {
-      const scanner = new Html5Qrcode("pos-barcode-scanner-region", {
+      const createScanner = () => new Html5Qrcode(SCANNER_REGION_ID, {
         formatsToSupport: [
           Html5QrcodeSupportedFormats.EAN_13,
           Html5QrcodeSupportedFormats.EAN_8,
@@ -194,35 +340,89 @@ export default function POS() {
         ],
         verbose: false,
       });
-      scannerRef.current = scanner;
-      const onSuccess = (text: string) => handleScanned(text);
+      const onSuccess = (text: string) => {
+        if (scannerReadyRef.current) handleScanned(text);
+      };
       const onErr = () => {};
-      const preferredCameraId = await getPreferredRearCameraId();
-      try {
-        await scanner.start(
-          preferredCameraId || { facingMode: { ideal: "environment" } },
-          createBarcodeScanConfig(preferredCameraId),
-          onSuccess,
-          onErr
-        );
-        await improveCameraForBarcode(scanner);
-      } catch (e1) {
-        // Fallback: try first available camera
-        const cams = await Html5Qrcode.getCameras();
-        if (!cams || cams.length === 0) throw new Error("No camera found");
-        const back = cams.find(c => /main|back|rear|environment/i.test(c.label) && !/ultra|wide|macro|front|selfie/i.test(c.label))
-          || cams.find(c => /back|rear|environment/i.test(c.label))
-          || cams[cams.length - 1];
-        await scanner.start(back.id, createBarcodeScanConfig(back.id), onSuccess, onErr);
-        await improveCameraForBarcode(scanner);
+      const devices = await getVideoInputDevices();
+      console.info("Available POS barcode scanner video inputs", devices.map((device, index) => ({
+        index,
+        label: device.label || `Camera ${index + 1}`,
+        deviceId: device.deviceId,
+      })));
+      let cameraOptions = buildCameraStartOptions(devices);
+      const triedDeviceIds = new Set<string>();
+      let lastError: unknown = null;
+
+      for (let index = 0; index < cameraOptions.length; index += 1) {
+        const option = cameraOptions[index];
+        scannerReadyRef.current = false;
+        const scanner = createScanner();
+        scannerRef.current = scanner;
+        try {
+          const config = createBarcodeScanConfig(option.deviceId);
+          const startSource = option.deviceId ? option.deviceId : option.source;
+          console.info("Starting POS barcode scanner camera", {
+            label: option.label,
+            isRear: option.isRear,
+            avoid: option.avoid,
+            deviceCount: devices.length,
+          });
+          if (option.deviceId) triedDeviceIds.add(option.deviceId);
+
+          await scanner.start(startSource, config, onSuccess, onErr);
+          try { scanner.pause(false); } catch { /* ignore pause errors while preparing video */ }
+          await improveCameraForBarcode(scanner);
+          const video = await waitForScannerVideoReady();
+          const lowResolution = hasLowActualResolution(video.videoWidth, video.videoHeight);
+          const activeTrackLabel = getActiveVideoTrackLabel(video);
+          const activeCameraShouldBeAvoided = shouldAvoidCameraLabel(activeTrackLabel || option.label);
+          if (lowResolution) {
+            const refreshedDevices = await getVideoInputDevices();
+            const newlyLabelledRearCameras = buildCameraStartOptions(refreshedDevices)
+              .filter(next => next.deviceId && next.isRear && !next.avoid && !triedDeviceIds.has(next.deviceId));
+            if (newlyLabelledRearCameras.length > 0) {
+              cameraOptions = [...cameraOptions, ...newlyLabelledRearCameras];
+            }
+          }
+          const hasAnotherRearCamera = cameraOptions.slice(index + 1).some(next => next.isRear && !next.avoid && next.deviceId !== option.deviceId);
+
+          if ((lowResolution || activeCameraShouldBeAvoided) && hasAnotherRearCamera) {
+            lastError = new Error(`Camera ${activeTrackLabel || option.label} opened at ${video.videoWidth}×${video.videoHeight}; trying another rear camera.`);
+            try { if (scanner.isScanning) await scanner.stop(); } catch { /* ignore retry stop errors */ }
+            try { scanner.clear(); } catch { /* ignore retry cleanup errors */ }
+            stopRegionVideoTracks();
+            scannerRef.current = null;
+            continue;
+          }
+
+          scannerReadyRef.current = true;
+          try { scanner.resume(); } catch { /* ignore resume errors if scanner is already active */ }
+          return;
+        } catch (error) {
+          lastError = error;
+          try { if (scanner.isScanning) await scanner.stop(); } catch { /* ignore retry stop errors */ }
+          try { scanner.clear(); } catch { /* ignore retry cleanup errors */ }
+          stopRegionVideoTracks();
+          scannerRef.current = null;
+        }
       }
+
+      if (devices.length === 0) {
+        throw new Error("No camera found. Use the manual barcode field below.");
+      }
+      throw lastError instanceof Error ? lastError : new Error("Unable to start a clear camera stream. Use the manual barcode field below.");
     } catch (err: unknown) {
       const error = err as { name?: string; message?: string };
       const msg = error?.name === "NotAllowedError"
-        ? "Camera permission denied. Allow camera access in browser settings."
-        : error?.message || "Unable to access camera";
+        ? "Camera permission denied. Allow camera access in browser settings, or enter the barcode manually."
+        : error?.name === "NotReadableError"
+          ? "Camera is already in use. Close other camera apps, or enter the barcode manually."
+          : error?.message || "Unable to access camera. Enter the barcode manually.";
       toast.error(msg);
-      stopScanner();
+      scannerReadyRef.current = false;
+      setTorchSupported(false);
+      setTorchOn(false);
     }
   };
 
@@ -291,12 +491,28 @@ export default function POS() {
           </div>
         </div>
         <p className="text-xs text-muted-foreground">Point your rear camera at a barcode or QR code.</p>
-        <div className="relative w-full overflow-hidden rounded-lg bg-black aspect-[3/4] sm:aspect-video">
+        <div className="relative w-full overflow-hidden rounded-lg bg-black aspect-[4/5] sm:aspect-video">
           <div
             id="pos-barcode-scanner-region"
-            className="w-full h-full [&_video]:w-full [&_video]:h-full [&_video]:object-cover [&_video]:filter-none"
+            className="w-full h-full [&_video]:w-full [&_video]:h-full [&_video]:object-cover [&_video]:filter-none [&_video]:transform-none"
           />
         </div>
+        <form
+          className="flex gap-2"
+          onSubmit={event => {
+            event.preventDefault();
+            submitManualBarcode();
+          }}
+        >
+          <Input
+            value={manualBarcode}
+            onChange={event => setManualBarcode(event.target.value)}
+            placeholder="Enter barcode manually"
+            inputMode="numeric"
+            autoComplete="off"
+          />
+          <Button type="submit" variant="secondary">Add</Button>
+        </form>
         <Button variant="outline" className="w-full" onClick={stopScanner}>Cancel</Button>
       </div>
     </div>,
