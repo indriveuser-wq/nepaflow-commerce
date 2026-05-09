@@ -37,12 +37,27 @@ type ScannerConstraint = MediaTrackConstraintSet & {
   whiteBalanceMode?: string;
 };
 
+type CameraStartOption = {
+  id: string;
+  label: string;
+  source: string | MediaTrackConstraints;
+  deviceId?: string | null;
+  isRear: boolean;
+  avoid: boolean;
+  score: number;
+};
+
+const SCANNER_REGION_ID = "pos-barcode-scanner-region";
+const MIN_ACCEPTABLE_VIDEO_WIDTH = 1280;
+const MIN_ACCEPTABLE_VIDEO_HEIGHT = 720;
+
 const createBarcodeScanConfig = (cameraId?: string | null) => ({
   fps: 20,
   qrbox: (vw: number, vh: number) => {
     const minEdge = Math.min(vw, vh);
-    const width = Math.floor(minEdge * 0.9);
-    return { width, height: Math.floor(width * 0.45) };
+    const isSmallViewport = minEdge < 520;
+    const width = Math.floor(minEdge * (isSmallViewport ? 0.96 : 0.9));
+    return { width, height: Math.floor(width * (isSmallViewport ? 0.62 : 0.45)) };
   },
   aspectRatio: 1.7777,
   disableFlip: true,
@@ -50,23 +65,94 @@ const createBarcodeScanConfig = (cameraId?: string | null) => ({
     ...(cameraId ? { deviceId: { exact: cameraId } } : { facingMode: { ideal: "environment" } }),
     width: { ideal: 1920 },
     height: { ideal: 1080 },
-    frameRate: { ideal: 30, max: 60 },
+    frameRate: { ideal: 30 },
+    resizeMode: "none",
     // @ts-expect-error - non-standard but supported on some mobile browsers
     focusMode: "continuous",
   } as MediaTrackConstraints,
 });
 
+const getVideoInputDevices = async () => {
+  if (!navigator.mediaDevices?.enumerateDevices) return [];
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  return devices.filter(device => device.kind === "videoinput");
+};
+
+const buildCameraStartOptions = (devices: MediaDeviceInfo[]): CameraStartOption[] => {
+  const scoredDevices = devices.map((device, index) => {
+    const label = device.label || `Camera ${index + 1}`;
+    const isRear = /back|rear|environment|world|main/i.test(label);
+    const isFront = /front|user|selfie|facetime/i.test(label);
+    const avoid = /ultra|wide|macro|depth|virtual/i.test(label);
+    const isUnlabeled = !device.label;
+    let score = 0;
+    if (isRear) score += 60;
+    if (/main/i.test(label)) score += 20;
+    if (isFront) score -= 60;
+    if (avoid) score -= 120;
+    if (isUnlabeled) score -= index;
+    return { device, label, isRear, avoid, score };
+  });
+
+  const sortedDevices = [...scoredDevices].sort((a, b) => b.score - a.score);
+  const rearOptions = sortedDevices
+    .filter(({ isRear, avoid }) => isRear && !avoid)
+    .map(({ device, label, isRear, avoid, score }) => ({
+      id: device.deviceId,
+      label,
+      source: device.deviceId,
+      deviceId: device.deviceId,
+      isRear,
+      avoid,
+      score,
+    }));
+
+  const environmentFallback: CameraStartOption = {
+    id: "environment-fallback",
+    label: "Environment camera",
+    source: {
+      facingMode: { ideal: "environment" },
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+      frameRate: { ideal: 30 },
+      resizeMode: "none",
+      // @ts-expect-error - non-standard but supported on some mobile browsers
+      focusMode: "continuous",
+    } as MediaTrackConstraints,
+    deviceId: null,
+    isRear: true,
+    avoid: false,
+    score: 30,
+  };
+
+  const deviceOptions = sortedDevices.map(({ device, label, isRear, avoid, score }) => ({
+    id: device.deviceId,
+    label,
+    source: device.deviceId,
+    deviceId: device.deviceId,
+    isRear,
+    avoid,
+    score,
+  }));
+
+  const queue = rearOptions.length > 0
+    ? [...rearOptions, environmentFallback, ...deviceOptions]
+    : [environmentFallback, ...deviceOptions];
+
+  return queue.filter((option, index, all) => option.id && all.findIndex(item => item.id === option.id) === index);
+};
+
 const getPreferredRearCameraId = async () => {
   try {
-    const cameras = await Html5Qrcode.getCameras();
+    const cameras = await getVideoInputDevices();
     const labelledRearCameras = cameras
       .filter(camera => /back|rear|environment|world/i.test(camera.label || ""))
       .map(camera => {
         const label = camera.label || "";
         let score = 0;
         if (/main|back|rear|environment|world/i.test(label)) score += 20;
-        if (/ultra|wide|macro|depth|front|user|selfie/i.test(label)) score -= 30;
-        return { id: camera.id, score };
+        if (/ultra|wide|macro|depth|virtual|front|user|selfie/i.test(label)) score -= 30;
+        return { id: camera.deviceId, score };
       })
       .sort((a, b) => b.score - a.score);
     return labelledRearCameras[0]?.id ?? null;
