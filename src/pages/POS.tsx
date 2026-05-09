@@ -198,6 +198,14 @@ const hasLowActualResolution = (width?: number, height?: number) => {
   return Math.max(width, height) < MIN_ACCEPTABLE_VIDEO_WIDTH || Math.min(width, height) < MIN_ACCEPTABLE_VIDEO_HEIGHT;
 };
 
+const shouldAvoidCameraLabel = (label?: string | null) => /ultra|wide|macro|depth|virtual/i.test(label || "");
+
+const getActiveVideoTrackLabel = (video: HTMLVideoElement) => {
+  const stream = video.srcObject;
+  if (!(stream instanceof MediaStream)) return "";
+  return stream.getVideoTracks()[0]?.label || "";
+};
+
 export default function POS() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
