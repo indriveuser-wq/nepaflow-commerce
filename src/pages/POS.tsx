@@ -223,6 +223,7 @@ export default function POS() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
+  const [manualBarcode, setManualBarcode] = useState("");
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const productsRef = useRef<ProductRow[]>([]);
   const store = usePOSStore();
@@ -278,6 +279,7 @@ export default function POS() {
       try { if (s.isScanning) await s.stop(); } catch { /* ignore scanner stop errors */ }
       try { await s.clear(); } catch { /* ignore scanner cleanup errors */ }
     }
+    stopRegionVideoTracks();
     setScannerOpen(false);
   };
 
@@ -312,6 +314,16 @@ export default function POS() {
       setTorchSupported(false);
       setTorchOn(false);
     }
+  };
+
+  const submitManualBarcode = () => {
+    const value = normalizeBarcode(manualBarcode);
+    if (!value) {
+      toast.error("Enter a barcode first.");
+      return;
+    }
+    setManualBarcode("");
+    handleScanned(value);
   };
 
   const startScanner = async () => {
