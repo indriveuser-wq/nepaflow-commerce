@@ -375,6 +375,8 @@ export default function POS() {
           await improveCameraForBarcode(scanner);
           const video = await waitForScannerVideoReady();
           const lowResolution = hasLowActualResolution(video.videoWidth, video.videoHeight);
+          const activeTrackLabel = getActiveVideoTrackLabel(video);
+          const activeCameraShouldBeAvoided = shouldAvoidCameraLabel(activeTrackLabel || option.label);
           if (lowResolution) {
             const refreshedDevices = await getVideoInputDevices();
             const newlyLabelledRearCameras = buildCameraStartOptions(refreshedDevices)
@@ -385,8 +387,8 @@ export default function POS() {
           }
           const hasAnotherRearCamera = cameraOptions.slice(index + 1).some(next => next.isRear && !next.avoid && next.deviceId !== option.deviceId);
 
-          if (lowResolution && hasAnotherRearCamera) {
-            lastError = new Error(`Camera ${option.label} opened at ${video.videoWidth}×${video.videoHeight}; trying another rear camera.`);
+          if ((lowResolution || activeCameraShouldBeAvoided) && hasAnotherRearCamera) {
+            lastError = new Error(`Camera ${activeTrackLabel || option.label} opened at ${video.videoWidth}×${video.videoHeight}; trying another rear camera.`);
             try { if (scanner.isScanning) await scanner.stop(); } catch { /* ignore retry stop errors */ }
             try { scanner.clear(); } catch { /* ignore retry cleanup errors */ }
             stopRegionVideoTracks();
