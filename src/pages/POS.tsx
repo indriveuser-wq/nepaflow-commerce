@@ -464,12 +464,28 @@ export default function POS() {
           </div>
         </div>
         <p className="text-xs text-muted-foreground">Point your rear camera at a barcode or QR code.</p>
-        <div className="relative w-full overflow-hidden rounded-lg bg-black aspect-[3/4] sm:aspect-video">
+        <div className="relative w-full overflow-hidden rounded-lg bg-black aspect-[4/5] sm:aspect-video">
           <div
             id="pos-barcode-scanner-region"
-            className="w-full h-full [&_video]:w-full [&_video]:h-full [&_video]:object-cover [&_video]:filter-none"
+            className="w-full h-full [&_video]:w-full [&_video]:h-full [&_video]:object-cover [&_video]:filter-none [&_video]:transform-none"
           />
         </div>
+        <form
+          className="flex gap-2"
+          onSubmit={event => {
+            event.preventDefault();
+            submitManualBarcode();
+          }}
+        >
+          <Input
+            value={manualBarcode}
+            onChange={event => setManualBarcode(event.target.value)}
+            placeholder="Enter barcode manually"
+            inputMode="numeric"
+            autoComplete="off"
+          />
+          <Button type="submit" variant="secondary">Add</Button>
+        </form>
         <Button variant="outline" className="w-full" onClick={stopScanner}>Cancel</Button>
       </div>
     </div>,
