@@ -37,6 +37,11 @@ type ScannerConstraint = MediaTrackConstraintSet & {
   whiteBalanceMode?: string;
 };
 
+type ScannerMediaConstraints = MediaTrackConstraints & {
+  focusMode?: string;
+  resizeMode?: string;
+};
+
 type CameraStartOption = {
   id: string;
   label: string;
@@ -51,6 +56,15 @@ const SCANNER_REGION_ID = "pos-barcode-scanner-region";
 const MIN_ACCEPTABLE_VIDEO_WIDTH = 1280;
 const MIN_ACCEPTABLE_VIDEO_HEIGHT = 720;
 
+const createHighQualityVideoConstraints = (cameraId?: string | null): ScannerMediaConstraints => ({
+  ...(cameraId ? { deviceId: { exact: cameraId } } : { facingMode: { ideal: "environment" } }),
+  width: { ideal: 1920 },
+  height: { ideal: 1080 },
+  frameRate: { ideal: 30 },
+  resizeMode: "none",
+  focusMode: "continuous",
+});
+
 const createBarcodeScanConfig = (cameraId?: string | null) => ({
   fps: 20,
   qrbox: (vw: number, vh: number) => {
@@ -61,15 +75,7 @@ const createBarcodeScanConfig = (cameraId?: string | null) => ({
   },
   aspectRatio: 1.7777,
   disableFlip: true,
-  videoConstraints: {
-    ...(cameraId ? { deviceId: { exact: cameraId } } : { facingMode: { ideal: "environment" } }),
-    width: { ideal: 1920 },
-    height: { ideal: 1080 },
-    frameRate: { ideal: 30 },
-    resizeMode: "none",
-    // @ts-expect-error - non-standard but supported on some mobile browsers
-    focusMode: "continuous",
-  } as MediaTrackConstraints,
+  videoConstraints: createHighQualityVideoConstraints(cameraId),
 });
 
 const getVideoInputDevices = async () => {
@@ -110,34 +116,31 @@ const buildCameraStartOptions = (devices: MediaDeviceInfo[]): CameraStartOption[
   const environmentFallback: CameraStartOption = {
     id: "environment-fallback",
     label: "Environment camera",
-    source: {
-      facingMode: { ideal: "environment" },
-      width: { ideal: 1920 },
-      height: { ideal: 1080 },
-      frameRate: { ideal: 30 },
-      resizeMode: "none",
-      // @ts-expect-error - non-standard but supported on some mobile browsers
-      focusMode: "continuous",
-    } as MediaTrackConstraints,
+    source: createHighQualityVideoConstraints(),
     deviceId: null,
     isRear: true,
     avoid: false,
     score: 30,
   };
 
-  const deviceOptions = sortedDevices.map(({ device, label, isRear, avoid, score }) => ({
-    id: device.deviceId,
-    label,
-    source: device.deviceId,
-    deviceId: device.deviceId,
-    isRear,
-    avoid,
-    score,
-  }));
+  const deviceOptions = sortedDevices
+    .filter(({ avoid }) => !avoid)
+    .map(({ device, label, isRear, avoid, score }) => ({
+      id: device.deviceId,
+      label,
+      source: device.deviceId,
+      deviceId: device.deviceId,
+      isRear,
+      avoid,
+      score,
+    }));
 
+  const hasUsefulLabels = sortedDevices.some(({ device }) => Boolean(device.label));
   const queue = rearOptions.length > 0
-    ? [...rearOptions, environmentFallback, ...deviceOptions]
-    : [environmentFallback, ...deviceOptions];
+    ? [...rearOptions, ...deviceOptions, environmentFallback]
+    : hasUsefulLabels
+      ? [...deviceOptions, environmentFallback]
+      : [environmentFallback, ...deviceOptions];
 
   return queue.filter((option, index, all) => option.id && all.findIndex(item => item.id === option.id) === index);
 };
@@ -159,6 +162,59 @@ const getPreferredRearCameraId = async () => {
   } catch {
     return null;
   }
+};
+
+const getScannerVideoElement = () => (
+  document.querySelector(`#${SCANNER_REGION_ID} video`) as HTMLVideoElement | null
+);
+
+const prepareScannerVideoElement = (video: HTMLVideoElement) => {
+  video.setAttribute("playsinline", "true");
+  video.setAttribute("autoplay", "true");
+  video.setAttribute("muted", "true");
+  video.playsInline = true;
+  video.autoplay = true;
+  video.muted = true;
+  video.style.objectFit = "cover";
+  video.style.transform = "none";
+  video.style.filter = "none";
+};
+
+const waitForScannerVideoReady = async (timeoutMs = 3000): Promise<HTMLVideoElement> => {
+  const startedAt = Date.now();
+  return new Promise((resolve, reject) => {
+    const tick = () => {
+      const video = getScannerVideoElement();
+      if (video) {
+        prepareScannerVideoElement(video);
+        if (video.readyState >= HTMLMediaElement.HAVE_METADATA && video.videoWidth > 0 && video.videoHeight > 0) {
+          resolve(video);
+          return;
+        }
+      }
+      if (Date.now() - startedAt > timeoutMs) {
+        reject(new Error("Camera preview did not become ready. Try the manual barcode field."));
+        return;
+      }
+      requestAnimationFrame(tick);
+    };
+    tick();
+  });
+};
+
+const stopRegionVideoTracks = () => {
+  document.querySelectorAll<HTMLVideoElement>(`#${SCANNER_REGION_ID} video`).forEach(video => {
+    const stream = video.srcObject;
+    if (stream instanceof MediaStream) {
+      stream.getTracks().forEach(track => track.stop());
+      video.srcObject = null;
+    }
+  });
+};
+
+const hasLowActualResolution = (width?: number, height?: number) => {
+  if (!width || !height) return true;
+  return Math.max(width, height) < MIN_ACCEPTABLE_VIDEO_WIDTH || Math.min(width, height) < MIN_ACCEPTABLE_VIDEO_HEIGHT;
 };
 
 export default function POS() {
