@@ -332,13 +332,14 @@ export default function POS() {
     // Open the modal first so the region div exists
     setTorchSupported(false);
     setTorchOn(false);
+    scannerReadyRef.current = false;
     setScannerOpen(true);
     // Wait one frame for region to mount
     await new Promise(r => requestAnimationFrame(() => r(null)));
-    const region = document.getElementById("pos-barcode-scanner-region");
+    const region = document.getElementById(SCANNER_REGION_ID);
     if (!region) { toast.error("Scanner region missing"); setScannerOpen(false); return; }
     try {
-      const scanner = new Html5Qrcode("pos-barcode-scanner-region", {
+      const createScanner = () => new Html5Qrcode(SCANNER_REGION_ID, {
         formatsToSupport: [
           Html5QrcodeSupportedFormats.EAN_13,
           Html5QrcodeSupportedFormats.EAN_8,
@@ -350,35 +351,70 @@ export default function POS() {
         ],
         verbose: false,
       });
-      scannerRef.current = scanner;
-      const onSuccess = (text: string) => handleScanned(text);
+      const onSuccess = (text: string) => {
+        if (scannerReadyRef.current) handleScanned(text);
+      };
       const onErr = () => {};
-      const preferredCameraId = await getPreferredRearCameraId();
-      try {
-        await scanner.start(
-          preferredCameraId || { facingMode: { ideal: "environment" } },
-          createBarcodeScanConfig(preferredCameraId),
-          onSuccess,
-          onErr
-        );
-        await improveCameraForBarcode(scanner);
-      } catch (e1) {
-        // Fallback: try first available camera
-        const cams = await Html5Qrcode.getCameras();
-        if (!cams || cams.length === 0) throw new Error("No camera found");
-        const back = cams.find(c => /main|back|rear|environment/i.test(c.label) && !/ultra|wide|macro|front|selfie/i.test(c.label))
-          || cams.find(c => /back|rear|environment/i.test(c.label))
-          || cams[cams.length - 1];
-        await scanner.start(back.id, createBarcodeScanConfig(back.id), onSuccess, onErr);
-        await improveCameraForBarcode(scanner);
+      const devices = await getVideoInputDevices();
+      const cameraOptions = buildCameraStartOptions(devices);
+      let lastError: unknown = null;
+
+      for (let index = 0; index < cameraOptions.length; index += 1) {
+        const option = cameraOptions[index];
+        scannerReadyRef.current = false;
+        const scanner = createScanner();
+        scannerRef.current = scanner;
+        try {
+          const config = createBarcodeScanConfig(option.deviceId);
+          const startSource = option.deviceId ? option.deviceId : option.source;
+          console.info("Starting POS barcode scanner camera", {
+            label: option.label,
+            isRear: option.isRear,
+            avoid: option.avoid,
+            deviceCount: devices.length,
+          });
+
+          await scanner.start(startSource, config, onSuccess, onErr);
+          await improveCameraForBarcode(scanner);
+          const video = await waitForScannerVideoReady();
+          const lowResolution = hasLowActualResolution(video.videoWidth, video.videoHeight);
+          const hasAnotherRearCamera = cameraOptions.slice(index + 1).some(next => next.isRear && !next.avoid && next.deviceId !== option.deviceId);
+
+          if (lowResolution && hasAnotherRearCamera) {
+            lastError = new Error(`Camera ${option.label} opened at ${video.videoWidth}×${video.videoHeight}; trying another rear camera.`);
+            try { if (scanner.isScanning) await scanner.stop(); } catch { /* ignore retry stop errors */ }
+            try { scanner.clear(); } catch { /* ignore retry cleanup errors */ }
+            stopRegionVideoTracks();
+            scannerRef.current = null;
+            continue;
+          }
+
+          scannerReadyRef.current = true;
+          return;
+        } catch (error) {
+          lastError = error;
+          try { if (scanner.isScanning) await scanner.stop(); } catch { /* ignore retry stop errors */ }
+          try { scanner.clear(); } catch { /* ignore retry cleanup errors */ }
+          stopRegionVideoTracks();
+          scannerRef.current = null;
+        }
       }
+
+      if (devices.length === 0) {
+        throw new Error("No camera found. Use the manual barcode field below.");
+      }
+      throw lastError instanceof Error ? lastError : new Error("Unable to start a clear camera stream. Use the manual barcode field below.");
     } catch (err: unknown) {
       const error = err as { name?: string; message?: string };
       const msg = error?.name === "NotAllowedError"
-        ? "Camera permission denied. Allow camera access in browser settings."
-        : error?.message || "Unable to access camera";
+        ? "Camera permission denied. Allow camera access in browser settings, or enter the barcode manually."
+        : error?.name === "NotReadableError"
+          ? "Camera is already in use. Close other camera apps, or enter the barcode manually."
+          : error?.message || "Unable to access camera. Enter the barcode manually.";
       toast.error(msg);
-      stopScanner();
+      scannerReadyRef.current = false;
+      setTorchSupported(false);
+      setTorchOn(false);
     }
   };
 
