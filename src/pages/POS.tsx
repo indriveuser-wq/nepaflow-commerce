@@ -145,25 +145,6 @@ const buildCameraStartOptions = (devices: MediaDeviceInfo[]): CameraStartOption[
   return queue.filter((option, index, all) => option.id && all.findIndex(item => item.id === option.id) === index);
 };
 
-const getPreferredRearCameraId = async () => {
-  try {
-    const cameras = await getVideoInputDevices();
-    const labelledRearCameras = cameras
-      .filter(camera => /back|rear|environment|world/i.test(camera.label || ""))
-      .map(camera => {
-        const label = camera.label || "";
-        let score = 0;
-        if (/main|back|rear|environment|world/i.test(label)) score += 20;
-        if (/ultra|wide|macro|depth|virtual|front|user|selfie/i.test(label)) score -= 30;
-        return { id: camera.deviceId, score };
-      })
-      .sort((a, b) => b.score - a.score);
-    return labelledRearCameras[0]?.id ?? null;
-  } catch {
-    return null;
-  }
-};
-
 const getScannerVideoElement = () => (
   document.querySelector(`#${SCANNER_REGION_ID} video`) as HTMLVideoElement | null
 );
