@@ -225,6 +225,7 @@ export default function POS() {
   const [torchOn, setTorchOn] = useState(false);
   const [manualBarcode, setManualBarcode] = useState("");
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const scannerReadyRef = useRef(false);
   const productsRef = useRef<ProductRow[]>([]);
   const store = usePOSStore();
   const isMobile = useIsMobile();
@@ -272,6 +273,7 @@ export default function POS() {
   const stopScanner = async () => {
     const s = scannerRef.current;
     scannerRef.current = null;
+    scannerReadyRef.current = false;
     setTorchSupported(false);
     setTorchOn(false);
     if (s) {
